@@ -38,8 +38,9 @@ pip install -r requirements.txt
 ## Usage
 
 ```ruby
-usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--cover_art [COVER_ART_PATH]] [--author [AUTHOR]] 
-                        [--title [TITLE]] [--genre [GENRE]] [--year [YEAR]] [--comment [COMMENT]] [AUDIOBOOK_PATH]
+usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--cover_art [COVER_ART_PATH]]
+                        [--author [AUTHOR]] [--title [TITLE]] [--genre [GENRE]] [--year [YEAR]]
+                        [--comment [COMMENT]] [AUDIOBOOK_PATH]
 
 positional arguments:
 
@@ -49,19 +50,19 @@ options:
 
   -h, --help            show this help message and exit
   --timecodes_file [TIMECODES_FILE], -tc [TIMECODES_FILE]
-                        Path to generated srt timecode file (if ran previously in a different directory).
+                        path to generated srt timecode file (if ran previously in a different directory).
   --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
-                        Path to cover art file. Optional.
+                        path to cover art file. Optional.
   --author [AUTHOR], -a [AUTHOR]
-                        Author. Optional metadata field.
+                        audiobook author. Optional metadata field.
   --title [TITLE], -t [TITLE]
-                        Audiobook title. Optional metadata field.
+                        audiobook title. Optional metadata field.
   --genre [GENRE], -g [GENRE]
-                        Audiobook genre. Optional metadata field.
+                        audiobook genre. Optional metadata field.
   --year [YEAR], -y [YEAR]
-                        Audiobook release year. Optional metadata field.
+                        audiobook release year. Optional metadata field.
   --comment [COMMENT], -c [COMMENT]
-                        Audiobook comment. Optional metadata field.
+                        audiobook comment. Optional metadata field.
 
 ```
 
