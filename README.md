@@ -32,7 +32,10 @@ them. With that said, it's been remarkably accurate so far.
 To install python dependencies:
 
 ```shell
+# Using the requirements file (recommended)
 pip install -r requirements.txt
+# Manually installing packages
+pip install vosk rich
 ```
 
 ## Usage
@@ -50,7 +53,7 @@ options:
 
   -h, --help            show this help message and exit
   --timecodes_file [TIMECODES_FILE], -tc [TIMECODES_FILE]
-                        path to generated srt timecode file (if ran previously in a different directory).
+                        optional path to srt timecode file (if ran previously in a different directory).
   --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
                         path to cover art file. Optional.
   --author [AUTHOR], -a [AUTHOR]
@@ -66,3 +69,14 @@ options:
 
 ```
 
+### Examples
+
+```shell
+# Adding the title and genre metadata fields 
+python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --title 'Game of Thrones' --genre 'Fantasy'
+```
+
+```shell
+# Adding an external cover art file (using shorthand flag -ca)
+python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' -ca 'C:\path\to\cover_art.jpg'
+```
