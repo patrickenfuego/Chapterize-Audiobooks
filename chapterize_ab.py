@@ -6,6 +6,7 @@ from pprint import pprint
 from typing import Optional
 from pathlib import Path
 from sys import exit
+from time import sleep
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
 prog_name = 'Chapterize-Audiobooks'
@@ -118,7 +119,7 @@ def extract_coverart(audiobook: str | Path):
     :return: Path to cover art jpg file if found, otherwise None
     """
     covert_art = str(audiobook).replace('.mp3', '.jpg')
-    subprocess.run(['ffmpeg', '-loglevel', 'quiet', '-i',
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'quiet', '-i',
                     audiobook, '-an', '-c:v', 'copy', covert_art])
     if Path(covert_art).exists() and Path(covert_art).stat().st_size > 10:
         print("Cover art extracted\n")
@@ -187,40 +188,33 @@ def split_file(audiobook: str | Path, timecodes: list,
 
     command = ['ffmpeg', '-y', '-hide_banner', '-loglevel', 'info', '-i', f'{str(audiobook)}']
     if cover_art:
-        command.extend(['-i', cover_art, '-map', '0:0', '-map', '1:0',
-                        '-c', 'copy', '-id3v2_version', '3', '-metadata:s:v:1',
-                        'title="Cover"'])
+        command.extend(['-i', cover_art, '-id3v2_version', '3', '-metadata:s:v',
+                        'comment="Cover (front)"'])
+        stream = ['-map', '0:0', '-map', '1:0', '-c', 'copy']
     else:
-        command.extend(['-c', 'copy', '-id3v2_version', '3'])
+        command.extend(['-id3v2_version', '3'])
+        stream = ['-c', 'copy']
 
     # Handle metadata strings if they exist
     if 'album_artist' in metadata and cover_art:
-        command.extend(['-metadata:s:a:0', f"album_artist={metadata['album_artist']}"])
-    elif 'album_artist' in metadata:
-        command.extend(['-metadata', f"album_artist={metadata['album_artist']}"])
+        # command.extend(['-metadata:s:a:0', f"album_artist={metadata['album_artist']}"])
+        command.extend(['-metadata', f"album_artist={metadata['album_artist']}",
+                        '-metadata', f"artist={metadata['album_artist']}"])
     if 'genre' in metadata and cover_art:
-        command.extend(['-metadata:s:a:0', f"genre={metadata['genre']}"])
-    elif 'genre' in metadata:
         command.extend(['-metadata', f"genre={metadata['genre']}"])
     if 'album' in metadata and cover_art:
-        command.extend(['-metadata:s:a:0', f"album={metadata['album']}"])
-    elif 'album' in metadata:
         command.extend(['-metadata', f"album={metadata['album']}"])
     if 'date' in metadata and cover_art:
-        # command.extend(['-meta
-        command.extend(['-metadata:s:a:0', f"date={metadata['date']}"])
-    elif 'date' in metadata:
         command.extend(['-metadata', f"date={metadata['date']}"])
     if 'comment' in metadata and cover_art:
-        command.extend(['-metadata:s:a:0', f"comment={metadata['comment']}"])
-    elif 'comment' in metadata:
         command.extend(['-metadata', f"comment={metadata['comment']}"])
 
     counter = 1
     for times in timecodes:
         command_copy = command.copy()
         if 'start' in times:
-            command_copy.extend(['-ss', times['start']])
+            start_list = ['-ss', times['start']]
+            command_copy[5:5] = start_list
         if 'end' in times:
             command_copy.extend(['-to', times['end']])
         if 'chapter_type' in times:
@@ -229,12 +223,12 @@ def split_file(audiobook: str | Path, timecodes: list,
             file_path = audiobook.parent.joinpath(f"{file_stem} - {counter}.mp3")
 
         if cover_art:
-            command_copy.extend(['-metadata:s:a:0', f"title={times['chapter_type']}",
+            command_copy.extend([*stream, '-metadata', f"title={times['chapter_type']}",
                                  f'{file_path}'])
-        else:
-            command_copy.extend(['-metadata', f"title={times['chapter_type']}",
-                                 f'{file_path}'])
+
         counter += 1
+
+        pprint(command_copy)
 
         try:
             with open(log_path, 'a+') as fp:
@@ -243,6 +237,8 @@ def split_file(audiobook: str | Path, timecodes: list,
         except Exception as e:
             print(f"An exception occurred writing logs to file: {e}\nOutputting to stdout...")
             subprocess.run(command_copy, stdout=subprocess.STDOUT)
+
+        command_copy = None
 
 
 def generate_timecodes(audiobook: str | Path) -> Path:
@@ -310,12 +306,12 @@ def parse_timecodes(content: list) -> list[dict[str, str]]:
                 start = start_regexp.group(0).replace(',', '.')
 
                 if 'epilogue' in content[i+1]:
-                    chapter_type = 'epilogue'
+                    chapter_type = 'Epilogue'
                 elif 'chapter' in content[i+1]:
                     chapter_type = f'Chapter {counter}'
                     counter += 1
                 elif 'prologue' in content[i+1]:
-                    chapter_type = 'prologue'
+                    chapter_type = 'Chapter 0 (Prologue)'
                 else:
                     chapter_type = ''
                 # Build dict with start codes and marker
@@ -348,7 +344,11 @@ def main():
     :return: None
     """
     print("Starting script...\n")
+
     audiobook_file, metadata_file, in_metadata = parse_args()
+    if not str(audiobook_file).endswith('.mp3'):
+        print("ERROR: The script only works with .mp3 files (for now)")
+        exit(5)
     parsed_metadata = extract_metadata(audiobook_file, metadata_file)
     # Combine the dicts, overwriting existing keys with user values if passed
     parsed_metadata |= in_metadata
@@ -379,9 +379,10 @@ def main():
 
     print("\nRunning split on input file...", end=" ")
     split_file(audiobook_file, timecodes, parsed_metadata, cover_art)
+    sleep(1)
     # Subtract 1, accounting for the existing file
     file_count = (sum(1 for x in audiobook_file.parent.glob('*.mp3') if x.is_file())) - 1
-    if file_count >= len(timecodes):
+    if file_count >= len(timecodes) - 1:
         print(f"SUCCESS! File successfully split into {file_count} files")
     else:
         print(f"WARNING: {file_count} files were generated, which is less than expected")
