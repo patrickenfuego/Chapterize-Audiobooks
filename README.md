@@ -9,22 +9,19 @@ dissect a waveform to look for chapter breaks, or deal with all the annoyances t
 file.
 
 The script utilizes the `vosk-api` machine learning library which performs a speech-to-text conversion on the
-audiobook file, generating timestamps throughout which are stored as a srt (subrip) file. The file is then parsed,
+audiobook file, generating timestamps throughout which are stored in a srt (subrip) file. The file is then parsed,
 searching for phrases like "prologue", "chapter", and "epilogue", which are used as chapter markers in the generated
 chapter files.
 
 The script will also parse metadata from the source file along with the cover art (if present) and copy it into each
-chapter file automatically. There are CLI parameters you can use to pass your own metadata, which always take
-precedence over the fields extracted from the file (if there is a conflict).
-
-This script is still in alpha, and thus there are bound to be some issues; I've noticed a few words
-and phrases that have falsely generated chapter markers, which I'm currently compiling into an *ignore* list as I see
-them. With that said, it's been remarkably accurate so far.
+chapter file automatically. There are CLI parameters you can use to pass your own ID3-compliant metadata properties, too,
+which always take precedence over the fields extracted from the file (if there is a conflict). Otherwise, the tags will
+be combined.
 
 ## Dependencies
 
-- ffmpeg
-- python 3.9+
+- [ffmpeg](https://ffmpeg.org/)
+- [python](https://www.python.org/downloads/) 3.9+
   - Packages:
     - rich
     - vosk
@@ -49,11 +46,11 @@ positional arguments:
 
   AUDIOBOOK_PATH        Path to audiobook file. Required.
   
-options:
+optional arguments:
 
   -h, --help            show this help message and exit
   --timecodes_file [TIMECODES_FILE], -tc [TIMECODES_FILE]
-                        optional path to srt timecode file (if ran previously in a different directory).
+                        optional path to an existing srt timecode file in a different directory.
   --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
                         path to cover art file. Optional.
   --author [AUTHOR], -a [AUTHOR]
@@ -80,3 +77,12 @@ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --title 'Game of Thrones
 # Adding an external cover art file (using shorthand flag -ca)
 python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' -ca 'C:\path\to\cover_art.jpg'
 ```
+
+## Improvement
+
+This script is still in alpha, and thus there are bound to be some issues; I've noticed a few words
+and phrases that have falsely generated chapter markers, which I'm currently compiling into an *ignore* list as I see
+them. With that said, it's been remarkably accurate so far.
+
+I encourage anyone who might use this to report any issues you find, particularly with false positive chapter markers.
+The more false positives identified, the more accurate it will be!
