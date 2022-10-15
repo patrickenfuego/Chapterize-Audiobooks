@@ -86,7 +86,7 @@ pip install vosk rich
 ```ruby
 usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--cover_art [COVER_ART_PATH]]
                         [--author [AUTHOR]] [--title [TITLE]] [--genre [GENRE]] [--year [YEAR]]
-                        [--comment [COMMENT]] [AUDIOBOOK_PATH]
+                        [--comment [COMMENT]] [AUDIOBOOK_PATH] [--language [LANGUAGE]] [--list_languages]
 
 positional arguments:
 
