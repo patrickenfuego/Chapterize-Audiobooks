@@ -84,26 +84,27 @@ pip install vosk rich
 ## Usage
 
 ```ruby
-usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--cover_art [COVER_ART_PATH]]
-                        [--author [AUTHOR]] [--title [TITLE]] [--genre [GENRE]] [--year [YEAR]]
-                        [--comment [COMMENT]] [AUDIOBOOK_PATH] [--language [LANGUAGE]] [--list_languages]
+usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--language [LANGUAGE]] 
+                        [--list_languages] [--cover_art [COVER_ART_PATH]] [--author [AUTHOR]]
+                        [--year [YEAR]] [--title [TITLE]] [--genre [GENRE]] [--comment [COMMENT]]
+                        [AUDIOBOOK_PATH]  
 
 positional arguments:
 
   AUDIOBOOK_PATH        Path to audiobook mp3. Required.
   
-optional arguments:
+optional argument flags:
 
-  -h, --help            show this help message and exit
+  -ll, --list_languages   list supported languages and exit.
+  -h, --help              show this help message and exit.
+  
+optional arguments:
   
   --timecodes_file [TIMECODES_FILE], -tc [TIMECODES_FILE]
   DESCRIPTION:         optional path to an existing srt timecode file in a different directory.
                         
   --language [LANGUAGE], -l [LANGUAGE]
-  DESCRIPTION:         lodel language to use. Requires a supported model ('en-us' is provided)
-    
- --list_languages, -ll
-  DESCRIPTION:         list supported languages and exit.
+  DESCRIPTION:         model language to use. requires a supported model ('en-us' is provided)        
                         
   --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
   DESCRIPTION:         path to cover art file. Optional.
