@@ -194,16 +194,17 @@ def convert_to_wav(file: str | Path) -> Path:
 def convert_time(time: str) -> str:
     """
     Convert timecodes for chapter markings.
+
     Helper function to subtract 1 second from each start time, which is used as the
     end time for the previous chapter segment.
 
     :param time: Timecode in Sexagesimal format
     :return: Sexagesimal formatted time marker
     """
+
     try:
         parts = time.split(':')
-        last = str(parts[-1]).split('.')[0]
-        milliseconds = parts[-1].split('.')[1]
+        last, milliseconds = str(parts[-1]).split('.')
         parts[-1] = str(int(last) - 1)
     except Exception as e:
         parts = None
@@ -348,7 +349,7 @@ def parse_timecodes(content: list) -> list[dict[str, str]]:
 
     # Some false positive phrases that trigger a chapter marker...will need building over time
     excluded_phrases = [
-        'chapter and verse', 'chapters'
+        'chapter and verse', 'chapters', 'this chapter', 'chapter of', 'in chapter'
     ]
     timecodes = []
     counter = 1
