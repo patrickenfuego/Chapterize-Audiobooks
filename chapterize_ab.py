@@ -349,13 +349,13 @@ def generate_timecodes(audiobook: str | Path, language: str) -> Path:
     sample_rate = 16000
     model_root = Path(r"model")
     try:
-        if model_path := [d for d in model_root.iterdir() if d.is_dir()][0]:
+        if model_path := [d for d in model_root.iterdir() if d.is_dir() and 'vosk' in d.stem][0]:
             con.print(":white_heavy_check_mark: Local ML model found\n")
     except IndexError:
         con.print(
             "[bold yellow]WARNING:[/] Local ML model was not found (did you delete it?).\n"
-            "The script will attempt to use an online resource, which "
-            "isn't always reliable"
+            "The script will attempt to use an online model, which "
+            "isn't always reliable. Fair warning."
         )
         model_path = None
 
