@@ -1,5 +1,6 @@
 <a href="https://github.com/patrickenfuego/Chapterize-Audiobooks"><img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/patrickenfuego/Chapterize-Audiobooks"><a/>
 <a href="https://github.com/patrickenfuego/Chapterize-Audiobooks"><img alt="python" src="https://img.shields.io/badge/python-v3.9%2B-blue"><a/>
+<a href="https://github.com/patrickenfuego/Chapterize-Audiobooks"><img src="https://img.shields.io/badge/platform-win | linux | mac-eeeeee"><a/>
 
 # Chapterize-Audiobooks
 
@@ -21,13 +22,19 @@ chapter file automatically. There are CLI parameters you can use to pass your ow
 which always take precedence over the fields extracted from the file (if there is a conflict). Otherwise, the tags will
 be combined.
 
+### Notes on the Model
+
+The model used for speech-to-text conversion is really dependent on the quality of the audio. The model included in this
+repo is meant for small distributions on mobile systems, as it is the only one that will fit in a GitHub repository. While it has worked really well in my testing, you can download a larger model [here](https://alphacephei.com/vosk/models); simply replace the directory inside `/model` with the new model directory.
+
+
 ## Dependencies
 
 - [ffmpeg](https://ffmpeg.org/)
 - [python](https://www.python.org/downloads/) 3.9+
   - Packages:
-    - rich
-    - vosk
+    - [rich](https://github.com/Textualize/rich)
+    - [vosk](https://github.com/alphacep/vosk-api)
 
 To install python dependencies:
 
