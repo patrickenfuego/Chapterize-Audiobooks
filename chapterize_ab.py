@@ -1,16 +1,17 @@
-import os
 import re
 import subprocess
 import argparse
+import sys
 from typing import Optional
+from io import StringIO
 from pathlib import Path
-from sys import exit
+from os import getcwd
 from rich.progress import track
 from rich.console import Console
-from rich.pretty import Pretty
+from rich.pretty import Pretty, pprint as rpprint
 from rich.panel import Panel
 from rich.table import Table
-from vosk import Model, KaldiRecognizer, SetLogLevel
+from vosk import Model, KaldiRecognizer, SetLogLevel, list_languages
 
 '''
     Globals
@@ -21,9 +22,8 @@ prog_version = '0.1.0'
 con = Console()
 
 '''
-    Function Declarations
+    Utility Function Declarations
 '''
-
 
 def path_exists(path: str | Path) -> Path:
     """
@@ -37,6 +37,38 @@ def path_exists(path: str | Path) -> Path:
     else:
         raise FileExistsError(f"The path: <{path}> does not exist")
 
+
+def verify_language(language: str) -> str:
+    """
+    Verifies language option in argparse.
+
+    :param language: Model language
+    :return: The language string if it is a supported language
+    """
+
+    # Allocate buffer to capture print output
+    buff = StringIO()
+    sys.stdout = buff
+    list_languages()
+    languages = buff.getvalue().split("\n")[0:-1]
+    # Restore stdout
+    sys.stdout = sys.__stdout__
+
+    if not language:
+        con.print("[bold red]ERROR:[/] Language option appears to be empty")
+        sys.exit(14)
+    elif language and language not in languages:
+        con.print("[bold red]ERROR:[/] Invalid language code entered. Possible options:\n")
+        rpprint(languages)
+        print("\n")
+        sys.exit(15)
+    else:
+        return language
+
+
+'''
+    Function Declarations
+'''
 
 def parse_args():
     """
@@ -56,8 +88,12 @@ def parse_args():
     parser.add_argument('--timecodes_file', '-tc', nargs='?', metavar='TIMECODES_FILE',
                         type=path_exists, dest='timecodes',
                         help='Path to generated srt timecode file (if ran previously in a different directory)')
+    parser.add_argument('--language', '-l', dest='lang', nargs='?', default='en-us',
+                        metavar='LANGUAGE', type=verify_language,
+                        help='Model language to use. Requires a supported model (en-us is provided)')
+    parser.add_argument('--list_languages', '-ll', action='store_true', help='List supported languages and exit')
     parser.add_argument('--cover_art', '-ca', dest='cover_art', nargs='?', default=None,
-                        metavar='COVER_ART_PATH', type=path_exists, help='Path to cover art file. Optional.')
+                        metavar='COVER_ART_PATH', type=path_exists, help='Path to cover art file. Optional')
     parser.add_argument('--author', '-a', dest='author', nargs='?', default=None,
                         metavar='AUTHOR', type=str, help='Author. Optional metadata field')
     parser.add_argument('--title', '-t', dest='title', nargs='?', default=None,
@@ -70,6 +106,18 @@ def parse_args():
                         metavar='COMMENT', type=str, help='Audiobook comment. Optional metadata field')
 
     args = parser.parse_args()
+
+    if args.list_languages:
+        con.print("[green]Supported langauge codes:\n")
+        list_languages()
+        con.print(
+            "\n[bold yellow]Only the 'en-us' model is provided. "
+            "Other language models must be downloaded manually.\n"
+            "Follow [link=https://alphacephei.com/vosk/models]this link[/link] "
+            "to download models in other languages. See the README for more info.[/]\n"
+        )
+        exit(0)
+
     meta_fields = {'cover_art': args.cover_art if args.cover_art else None,
                    'genre': args.genre}
     if args.author:
@@ -81,9 +129,9 @@ def parse_args():
     if args.comment:
         meta_fields['comment'] = args.comment
     meta_join = args.audiobook.parent.joinpath('metadata.txt')
-    meta_file = meta_join if meta_join else Path(os.getcwd()).joinpath('metadata.txt')
+    meta_file = meta_join if meta_join else Path(getcwd()).joinpath('metadata.txt')
 
-    return args.audiobook, meta_file, meta_fields
+    return args.audiobook, meta_file, meta_fields, args.lang
 
 
 def print_table(list_dicts: list[dict]) -> None:
@@ -97,7 +145,7 @@ def print_table(list_dicts: list[dict]) -> None:
     table = Table(
         title='[bold magenta]Parsed Timecodes for Chapters[/]',
         caption='[red]EOF[/] = End of File',
-        row_styles=['dim', '']
+        # row_styles=['dim', '']
     )
     table.add_column('Start')
     table.add_column('End')
@@ -210,7 +258,7 @@ def convert_time(time: str) -> str:
         parts = None
         milliseconds = None
         con.print(f"[bold red]ERROR:[/] Could not covert end chapter marker: [red]{e}[/]")
-        exit(9)
+        sys.exit(9)
 
     return f"{':'.join(parts)}.{milliseconds}"
 
@@ -289,25 +337,27 @@ def split_file(audiobook: str | Path, timecodes: list,
         command_copy = None
 
 
-def generate_timecodes(audiobook: str | Path) -> Path:
+def generate_timecodes(audiobook: str | Path, language: str) -> Path:
     """
     Generate chapter timecodes using vosk Machine Learning API.
 
     :param audiobook: Path to input audiobook file
+    :param language: Language used by the parser
     :return: Path to timecode file
     """
 
     sample_rate = 16000
-    model_path = r"model/vosk-model-small-en-us-0.15"
-    # Check if model file can be found locally
-    if Path(model_path).exists():
-        con.print(":white_heavy_check_mark: Local ML model found\n")
-    else:
+    model_root = Path(r"model")
+    try:
+        if model_path := [d for d in model_root.iterdir() if d.is_dir()][0]:
+            con.print(":white_heavy_check_mark: Local ML model found\n")
+    except IndexError:
         con.print(
             "[bold yellow]WARNING:[/] Local ML model was not found (did you delete it?).\n"
             "The script will attempt to use an online resource, which "
             "isn't always reliable"
         )
+        model_path = None
 
     out_file = str(audiobook).replace('.mp3', '.srt')
     if Path(out_file).exists() and Path(out_file).stat().st_size > 10:
@@ -317,7 +367,7 @@ def generate_timecodes(audiobook: str | Path) -> Path:
         return Path(out_file)
 
     SetLogLevel(-1)
-    model = Model(lang="en-us", model_path=model_path)
+    model = Model(lang=language, model_path=model_path)
     rec = KaldiRecognizer(model, sample_rate)
     rec.SetWords(True)
 
@@ -333,7 +383,7 @@ def generate_timecodes(audiobook: str | Path) -> Path:
         con.print("[bold green]SUCCESS![/] Timecode file created\n")
     except Exception as e:
         con.print(f"[bold red]ERROR:[/] Failed to generate timecode file with vosk: [red]{e}[/]\n")
-        exit(3)
+        sys.exit(3)
 
     return Path(out_file)
 
@@ -397,7 +447,7 @@ def parse_timecodes(content: list) -> list[dict[str, str]]:
         return timecodes
     else:
         con.print('[bold red]ERROR:[/] Timecodes list cannot be empty. Exiting...')
-        exit(2)
+        sys.exit(2)
 
 
 def main():
@@ -413,10 +463,10 @@ def main():
     con.print("[magenta]Preparing chapterfying magic[/magenta] :zap:...")
     print("\n")
 
-    audiobook_file, metadata_file, in_metadata = parse_args()
+    audiobook_file, metadata_file, in_metadata, lang = parse_args()
     if not str(audiobook_file).endswith('.mp3'):
         con.print("[bold red]ERROR:[/] The script only works with .mp3 files (for now)")
-        exit(5)
+        sys.exit(5)
 
     con.rule("[cyan]Extracting metadata[/cyan]")
     print("\n")
@@ -453,7 +503,7 @@ def main():
     con.rule("[cyan]Generate Timecodes")
     print("\n")
     with con.status("[magenta]Sit tight, this might takes a while[/]...", spinner='pong'):
-        timecodes_file = generate_timecodes(audiobook_file)
+        timecodes_file = generate_timecodes(audiobook_file, lang)
 
     # Open file and parse timecodes
     with open(timecodes_file, 'r') as fp:
@@ -463,7 +513,7 @@ def main():
     timecodes = parse_timecodes(file_lines)
     if not timecodes:
         con.print("[bold red]ERROR:[/] Timecode dictionary cannot be empty")
-        exit(1)
+        sys.exit(1)
     con.print("[bold green]SUCCESS![/] Timecodes parsed\n")
     print_table(timecodes)
     print("\n")
