@@ -29,6 +29,40 @@ be combined.
 The model used for speech-to-text conversion is really dependent on the quality of the audio. The model included in this
 repo is meant for small distributions on mobile systems, as it is the only one that will fit in a GitHub repository. While it has worked really well in my testing, you can download a larger model [here](https://alphacephei.com/vosk/models); simply replace the directory inside `/model` with the new model directory.
 
+### Supported Languages
+
+The `vosk-api` provides models in several languages. By default, only 'en-us' is provided with this repository, but you can download additional models from [the vosk website](https://alphacephei.com/vosk/models). Simply replace the existing model inside the `/model` directory with the one you wish to use.
+
+The following list provides ths supported language codes at the time of this writing:
+
+- kz
+- en-gb
+- vn
+- es
+- ru
+- de
+- ja
+- cs
+- pl
+- en-in
+- hi
+- en-us
+- pt
+- nl
+- tr
+- ua
+- cn
+- eo
+- tl-ph
+- ar
+- it
+- fr
+- el-gr
+- ca
+- sv
+- fa
+
+---
 
 ## Dependencies
 
@@ -56,25 +90,38 @@ usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--cover_art [C
 
 positional arguments:
 
-  AUDIOBOOK_PATH        Path to audiobook file. Required.
+  AUDIOBOOK_PATH        Path to audiobook mp3. Required.
   
 optional arguments:
 
   -h, --help            show this help message and exit
+  
   --timecodes_file [TIMECODES_FILE], -tc [TIMECODES_FILE]
-                        optional path to an existing srt timecode file in a different directory.
+  DESCRIPTION:         optional path to an existing srt timecode file in a different directory.
+                        
+  --language [LANGUAGE], -l [LANGUAGE]
+  DESCRIPTION:         lodel language to use. Requires a supported model ('en-us' is provided)
+    
+ --list_languages, -ll
+  DESCRIPTION:         list supported languages and exit.
+                        
   --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
-                        path to cover art file. Optional.
+  DESCRIPTION:         path to cover art file. Optional.
+                        
   --author [AUTHOR], -a [AUTHOR]
-                        audiobook author. Optional metadata field.
+  DESCRIPTION:         audiobook author. Optional metadata field.
+                        
   --title [TITLE], -t [TITLE]
-                        audiobook title. Optional metadata field.
+  DESCRIPTION:         audiobook title. Optional metadata field.
+                        
   --genre [GENRE], -g [GENRE]
-                        audiobook genre. Optional metadata field.
+  DESCRIPTION:         audiobook genre. Optional metadata field.
+                        
   --year [YEAR], -y [YEAR]
-                        audiobook release year. Optional metadata field.
+  DESCRIPTION:         audiobook release year. Optional metadata field.
+                        
   --comment [COMMENT], -c [COMMENT]
-                        audiobook comment. Optional metadata field.
+  DESCRIPTION:         audiobook comment. Optional metadata field.
 
 ```
 
