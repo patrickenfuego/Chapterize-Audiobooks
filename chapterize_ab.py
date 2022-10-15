@@ -12,6 +12,10 @@ from rich.panel import Panel
 from rich.table import Table
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
+'''
+    Globals
+'''
+
 prog_name = 'Chapterize-Audiobooks'
 prog_version = '0.1.0'
 con = Console()
@@ -40,6 +44,7 @@ def parse_args():
 
     :return: A tuple containing the audiobook path, metadata file path, and user-defined metadata values
     """
+
     parser = argparse.ArgumentParser(
         description='''
         Splits a single monolithic mp3 audiobook file into multiple chapter files using Machine Learning. 
@@ -81,9 +86,17 @@ def parse_args():
     return args.audiobook, meta_file, meta_fields
 
 
-def print_table(list_dicts):
+def print_table(list_dicts: list[dict]) -> None:
+    """
+    Formats a list of dictionaries into a table. Currently only used for timecodes.
+
+    :param list_dicts: List of dictionaries to format
+    :return: None
+    """
+
     table = Table(
-        title='[magenta]Parsed Timecodes for Chapters[/magenta]',
+        title='[bold magenta]Parsed Timecodes for Chapters[/]',
+        caption='[red]EOF[/] = End of File',
         row_styles=['dim', '']
     )
     table.add_column('Start')
@@ -113,13 +126,14 @@ def extract_metadata(audiobook: str | Path, metadata_file: str | Path) -> dict:
     :param metadata_file: Path to the temporary ffmpeg metadata file
     :return: A dictionary containing metadata values
     """
-    subprocess.run(['ffmpeg', '-loglevel', 'quiet', '-i', audiobook,
+
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'quiet', '-i', audiobook,
                     '-f', 'ffmetadata', f'{metadata_file}'])
 
     meta_dict = {}
     # If path exists and has some content
     if path_exists(metadata_file) and Path(metadata_file).stat().st_size > 10:
-        con.print("[bold green]SUCCESS![/] Metadata file successfully generated!\n")
+        con.print("[bold green]SUCCESS![/] Metadata extraction complete")
         with open(metadata_file, 'r') as fp:
             meta_lines = fp.readlines()
 
@@ -130,25 +144,27 @@ def extract_metadata(audiobook: str | Path, metadata_file: str | Path) -> dict:
                 if key in ['title', 'genre', 'album_artist', 'artist', 'album', 'year']:
                     meta_dict[key] = value
     else:
-        con.print("[bold red]ERROR:[/] Failed to extract metadata file")
+        con.print("[bold yellow]WARNING:[/] Failed to parse metadata file, or none was found")
     # Delete the metadata file once done
     Path(metadata_file).unlink()
 
     return meta_dict
 
 
-def extract_coverart(audiobook: str | Path):
+def extract_coverart(audiobook: str | Path) -> str | Path | None:
     """
     Extract coverart file from audiobook if present.
 
     :param audiobook: Input audiobook file
     :return: Path to cover art jpg file if found, otherwise None
     """
+
     covert_art = str(audiobook).replace('.mp3', '.jpg')
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'quiet', '-i',
                     audiobook, '-an', '-c:v', 'copy', covert_art])
     if Path(covert_art).exists() and Path(covert_art).stat().st_size > 10:
-        con.print("[bold green]SUCCESS![/]Cover art extracted\n")
+        con.print("[bold green]SUCCESS![/] Cover art extracted")
+        print("\n")
         return covert_art
     else:
         con.print("[bold yellow]WARNING:[/] Failed to extract cover art, or none was found\n")
@@ -163,6 +179,7 @@ def convert_to_wav(file: str | Path) -> Path:
     :param file: Input .mp3 file to convert
     :return: Path to .wav file
     """
+
     wav_file = str(file).replace('.mp3', '.wav')
     con.print("[magenta]Converting file to wav...[/]")
     result = subprocess.run([
@@ -198,7 +215,7 @@ def convert_time(time: str) -> str:
 
 
 def split_file(audiobook: str | Path, timecodes: list,
-               metadata: dict, cover_art: Optional[str]):
+               metadata: dict, cover_art: Optional[str]) -> None:
     """
     Splits a single .mp3 file into chapterized segments.
 
@@ -278,17 +295,28 @@ def generate_timecodes(audiobook: str | Path) -> Path:
     :param audiobook: Path to input audiobook file
     :return: Path to timecode file
     """
+
     sample_rate = 16000
+    model_path = r"model/vosk-model-small-en-us-0.15"
+    # Check if model file can be found locally
+    if Path(model_path).exists():
+        con.print(":white_heavy_check_mark: Local ML model found\n")
+    else:
+        con.print(
+            "[bold yellow]WARNING:[/] Local ML model was not found (did you delete it?).\n"
+            "The script will attempt to use an online resource, which "
+            "isn't always reliable"
+        )
+
     out_file = str(audiobook).replace('.mp3', '.srt')
     if Path(out_file).exists() and Path(out_file).stat().st_size > 10:
-        con.print(
-            "[bold green]SUCCESS![/] An existing timecode file was found\n"
-        )
+        con.print("[bold green]SUCCESS![/] An existing timecode file was found")
+        print("\n")
+
         return Path(out_file)
 
     SetLogLevel(-1)
-    model = Model(lang="en-us",
-                  model_path=r"vosk_api/python/example/model/vosk-model-small-en-us-0.15")
+    model = Model(lang="en-us", model_path=model_path)
     rec = KaldiRecognizer(model, sample_rate)
     rec.SetWords(True)
 
@@ -300,8 +328,10 @@ def generate_timecodes(audiobook: str | Path) -> Path:
                               stdout=subprocess.PIPE).stdout as stream:
             with open(out_file, 'w+') as fp:
                 fp.writelines(rec.SrtResult(stream))
+
+        con.print("[bold green]SUCCESS![/] Timecode file created\n")
     except Exception as e:
-        print(f"[bold red]ERROR:[/] Failed to generate timecode file with vosk: [red]{e}[/]\n")
+        con.print(f"[bold red]ERROR:[/] Failed to generate timecode file with vosk: [red]{e}[/]\n")
         exit(3)
 
     return Path(out_file)
@@ -379,6 +409,8 @@ def main():
     print("\n\n")
     con.rule("\n[cyan]Starting script[/cyan]")
     print("\n")
+    con.print("[magenta]Preparing chapterfying magic[/magenta] :zap:...")
+    print("\n")
 
     audiobook_file, metadata_file, in_metadata = parse_args()
     if not str(audiobook_file).endswith('.mp3'):
@@ -389,8 +421,17 @@ def main():
     print("\n")
     parsed_metadata = extract_metadata(audiobook_file, metadata_file)
     # Combine the dicts, overwriting existing keys with user values if passed
-    parsed_metadata |= in_metadata
-    con.print(Panel(Pretty(parsed_metadata), title="Extracted Metadata"))
+    if parsed_metadata and in_metadata:
+        con.print("[magenta]Merging extracted and user metadata[/]...\n")
+        parsed_metadata |= in_metadata
+    # This should never hit, as genre has a default value in argparse
+    elif not in_metadata and not parsed_metadata:
+        con.print("[bold yellow]WARNING:[/] No metadata to append. What a shame\n")
+    # No metadata was found in file, using only argparse defaults
+    elif in_metadata and not parsed_metadata:
+        parsed_metadata = in_metadata
+        print("\n")
+    con.print(Panel(Pretty(parsed_metadata), title="ID3 Metadata"))
     print("\n")
 
     con.rule("[cyan]Discovering Cover Art")
@@ -400,16 +441,17 @@ def main():
         cover_art = extract_coverart(audiobook_file)
     else:
         if parsed_metadata['cover_art'].exists():
-            con.print("[bold green]SUCCESS![/] Cover art is...covered!\n")
+            con.print("[bold green]SUCCESS![/] Cover art is...covered!")
+            print("\n")
             cover_art = parsed_metadata['cover_art']
         else:
-            con.print("[yellow]WARNING:[yellow] Cover art path does not exist")
+            con.print("[bold yellow]WARNING:[yellow] Cover art path does not exist")
             cover_art = None
 
     # Generate timecodes from mp3 file
     con.rule("[cyan]Generate Timecodes")
     print("\n")
-    with con.status("This might takes a while..."):
+    with con.status("[magenta]Sit tight, this might takes a while[/]...", spinner='pong'):
         timecodes_file = generate_timecodes(audiobook_file)
 
     # Open file and parse timecodes
@@ -423,6 +465,7 @@ def main():
         exit(1)
     con.print("[bold green]SUCCESS![/] Timecodes parsed\n")
     print_table(timecodes)
+    print("\n")
 
     # Split the file
     con.rule("[cyan]Chapterize File")
