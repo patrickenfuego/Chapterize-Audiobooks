@@ -6,6 +6,8 @@
 
 Split a single, monolithic mp3 audiobook file into chapters using Machine Learning and ffmpeg.
 
+![demo](https://user-images.githubusercontent.com/47511320/196007691-a488f5a5-2cd8-4058-a582-cf633c537d4f.gif)
+
 ## About
 
 This is a simple command line utility that will chapterize your audiobooks for you. No longer will you have to
