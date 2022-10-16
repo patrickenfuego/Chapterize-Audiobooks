@@ -8,21 +8,29 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
 
 ![demo](https://user-images.githubusercontent.com/47511320/196007691-a488f5a5-2cd8-4058-a582-cf633c537d4f.gif)
 
+---
+
+## Table of Contents
+
+- [Chapterize-Audiobooks](#chapterize-audiobooks)
+  - [Table of Contents](#table-of-contents)
+  - [About](#about)
+    - [Notes on the Model](#notes-on-the-model)
+    - [Supported Languages](#supported-languages)
+  - [Dependencies](#dependencies)
+  - [Usage](#usage)
+    - [Examples](#examples)
+  - [Improvement](#improvement)
+
+---
+
 ## About
 
-This is a simple command line utility that will chapterize your audiobooks for you. No longer will you have to
-dissect a waveform to look for chapter breaks, or deal with all the annoyances that come with a single audiobook
-file.
+This is a simple command line utility that will chapterize your mp3 audiobooks for you. No longer will you have to dissect a waveform to look for chapter breaks, or deal with all the annoyances that come with a single audiobook file. You can use this as an intermediary step to creating m4b files, or keep the files the way they are.
 
-The script utilizes the `vosk-api` machine learning library which performs a speech-to-text conversion on the
-audiobook file, generating timestamps throughout which are stored in a srt (subrip) file. The file is then parsed,
-searching for phrases like "prologue", "chapter", and "epilogue", which are used as chapter markers in the generated
-chapter files.
+The script utilizes the `vosk-api` machine learning library which performs a speech-to-text conversion on the audiobook file, generating timestamps throughout which are stored in a srt (subrip) file. The file is then parsed, searching for phrases like "prologue", "chapter", and "epilogue", which are used as separators for the generated chapter files.
 
-The script will also parse metadata from the source file along with the cover art (if present) and copy it into each
-chapter file automatically. There are CLI parameters you can use to pass your own ID3-compliant metadata properties, too,
-which always take precedence over the fields extracted from the file (if there is a conflict). Otherwise, the tags will
-be combined.
+The script will also parse metadata from the source file along with the cover art (if present) and copy it into each chapter file automatically. There are CLI parameters you can use to pass your own ID3-compliant metadata properties, too, which always take precedence over the fields extracted from the file (if there is a conflict). Otherwise, the tags will be combined.
 
 ### Notes on the Model
 
@@ -74,12 +82,16 @@ The following list provides ths supported language codes at the time of this wri
 
 To install python dependencies:
 
-```shell
+```bash
 # Using the requirements file (recommended)
 pip install -r requirements.txt
 # Manually installing packages
 pip install vosk rich
 ```
+
+It is recommended that you add ffmpeg to your system PATH so you don't have to run the script from the same directory. How you do this depends on your Operating System; consult your OS documentation (if you aren't familiar with the process, it's super easy. Just Google it).
+
+---
 
 ## Usage
 
@@ -95,8 +107,8 @@ positional arguments:
   
 optional argument flags:
 
-  -ll, --list_languages   list supported languages and exit.
   -h, --help              show this help message and exit.
+  -ll, --list_languages   list supported languages and exit.
   
 optional arguments:
   
@@ -128,15 +140,22 @@ optional arguments:
 
 ### Examples
 
-```shell
+```bash
 # Adding the title and genre metadata fields 
-python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --title 'Game of Thrones' --genre 'Fantasy'
+~$ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --title 'Game of Thrones' --genre 'Fantasy'
 ```
 
-```shell
+```powershell
 # Adding an external cover art file (using shorthand flag -ca)
-python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' -ca 'C:\path\to\cover_art.jpg'
+PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' -ca 'C:\path\to\cover_art.jpg'
 ```
+
+```powershell
+# Set model to use German as the language (requires a different model, see above)
+PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --language 'de'
+```
+
+---
 
 ## Improvement
 
