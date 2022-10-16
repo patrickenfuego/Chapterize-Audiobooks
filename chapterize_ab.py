@@ -253,7 +253,14 @@ def convert_time(time: str) -> str:
     try:
         parts = time.split(':')
         last, milliseconds = str(parts[-1]).split('.')
-        parts[-1] = str(int(last) - 1)
+        if re.match('0\d', last):
+            if last == '00':
+                parts[1] = str(int(parts[1]) - 1)
+                parts[-1] = '59'
+            else:
+                parts[-1] = '0' + str(int(last) - 1)
+        else:
+            parts[-1] = str(int(last) - 1)
     except Exception as e:
         parts = None
         milliseconds = None
@@ -313,7 +320,7 @@ def split_file(audiobook: str | Path, timecodes: list,
             start_list = ['-ss', times['start']]
             command_copy[5:5] = start_list
         if 'end' in times:
-            command_copy.extend(['-to', times['end']])
+            command_copy[7:7] = ['-to', times['end']]
         if 'chapter_type' in times:
             file_path = audiobook.parent.joinpath(f"{file_stem} - {times['chapter_type']}.mp3")
         else:
@@ -523,7 +530,7 @@ def main():
     print("\n")
     split_file(audiobook_file, timecodes, parsed_metadata, cover_art)
     # Count the generated files and compare to timecode dict
-    file_count = (sum(1 for x in audiobook_file.parent.glob('*.mp3') if x.is_file()))
+    file_count = (sum(1 for x in audiobook_file.parent.glob('*.mp3') if x.stem != audiobook_file.stem))
     expected = len(timecodes)
     if file_count >= expected:
         con.print(f"[bold green]SUCCESS![/] Audiobook split into {file_count} files\n")
