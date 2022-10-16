@@ -322,10 +322,10 @@ def split_file(audiobook: str | Path, timecodes: list,
         if 'end' in times:
             command_copy[7:7] = ['-to', times['end']]
         if 'chapter_type' in times:
-            file_path = audiobook.parent.joinpath(f"{file_stem} - {times['chapter_type']}.mp3")
+            file_path = audiobook.parent.joinpath(f"{file_stem} {counter} - {times['chapter_type']}.mp3")
         else:
             file_path = audiobook.parent.joinpath(f"{file_stem} - {counter}.mp3")
-            counter += 1
+        counter += 1
 
         command_copy.extend([*stream, '-metadata', f"title={times['chapter_type']}",
                              f'{file_path}'])
@@ -431,7 +431,7 @@ def parse_timecodes(content: list) -> list[dict[str, str]]:
                     chapter_type = f'Chapter {counter}'
                     counter += 1
                 elif 'prologue' in content[i+1]:
-                    chapter_type = 'Chapter 0 (Prologue)'
+                    chapter_type = 'Prologue'
                 else:
                     chapter_type = ''
                 # Build dict with start codes and marker
