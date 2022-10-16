@@ -253,18 +253,32 @@ def convert_time(time: str) -> str:
     try:
         parts = time.split(':')
         last, milliseconds = str(parts[-1]).split('.')
-        if re.match('0\d', last):
-            if last == '00':
-                parts[1] = str(int(parts[1]) - 1)
-                parts[-1] = '59'
+
+        pattern = re.compile(r'0\d')
+        # Check for leading 0 and adjust time
+        if pattern.match(last):
+            # Adjust the hours position
+            if parts[1] == '00' and last == '00':
+                if pattern.match(parts[0]):
+                    first = f'0{str(int(parts[0]) - 1)}'
+                else:
+                    first = str(int(parts[0]) - 1)
+                parts = [first, '59', '59']
+            # Adjust the minutes position
+            elif last == '00':
+                if pattern.match(parts[1]):
+                    mid = f'0{str(int(parts[1]) - 1)}'
+                else:
+                    mid = str(int(parts[1]) - 1)
+                parts = [parts[0], mid, '59']
+            # Adjust the seconds position
             else:
-                parts[-1] = '0' + str(int(last) - 1)
+                parts[-1] = f'0{str(int(last) - 1)}'
         else:
             parts[-1] = str(int(last) - 1)
     except Exception as e:
-        parts = None
-        milliseconds = None
-        con.print(f"[bold red]ERROR:[/] Could not covert end chapter marker: [red]{e}[/]")
+        parts, milliseconds = None, None
+        con.print(f"[bold red]ERROR:[/] Could not covert end chapter marker for {time}: [red]{e}[/]")
         sys.exit(9)
 
     return f"{':'.join(parts)}.{milliseconds}"
