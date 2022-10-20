@@ -102,7 +102,8 @@ repo is meant for small distributions on mobile systems, as it is the only one t
 ## Usage
 
 ```ruby
-usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--language [LANGUAGE]] 
+usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--language [LANGUAGE]]
+                        [--list_languages] [--download_model [{small,large}]] [--model [{small,large}]]
                         [--list_languages] [--cover_art [COVER_ART_PATH]] [--author [AUTHOR]]
                         [--year [YEAR]] [--title [TITLE]] [--genre [GENRE]] [--comment [COMMENT]]
                         [AUDIOBOOK_PATH]  
