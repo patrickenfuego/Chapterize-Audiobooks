@@ -55,6 +55,15 @@ pip install vosk rich requests
 
 It is recommended that you add ffmpeg to your system PATH so you don't have to run the script from the same directory. How you do this depends on your Operating System; consult your OS documentation (if you aren't familiar with the process, it's super easy. Just Google it).
 
+Here is a quick example for Windows using PowerShell (it can be done via GUI, too):
+
+```powershell
+# Whatever the path is to your ffmpeg install
+$ffmpeg = 'C:\Users\SomeUser\Software\ffmpeg.exe'
+$newPath = $env:PATH + ";$ffmpeg"
+[Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+```
+
 ---
 
 ## Supported Languages and Models
@@ -103,10 +112,10 @@ repo is meant for small distributions on mobile systems, as it is the only one t
 
 ```ruby
 usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--language [LANGUAGE]]
-                        [--list_languages] [--download_model [{small,large}]] [--model [{small,large}]]
-                        [--list_languages] [--cover_art [COVER_ART_PATH]] [--author [AUTHOR]]
+                        [--list_languages] [--download_model [{small,large}]]
+                        [--model [{small,large}]] [--cover_art [COVER_ART_PATH]] [--author [AUTHOR]]
                         [--year [YEAR]] [--title [TITLE]] [--genre [GENRE]] [--comment [COMMENT]]
-                        [AUDIOBOOK_PATH]  
+                        [AUDIOBOOK_PATH]
 
 positional arguments:
 
