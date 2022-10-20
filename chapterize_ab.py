@@ -5,7 +5,6 @@ import sys
 import requests
 from shutil import unpack_archive, copytree, rmtree
 from typing import Optional
-from io import StringIO
 from pathlib import Path
 from rich.console import Console
 from rich.pretty import Pretty
