@@ -42,6 +42,7 @@ models_large = [
     'vosk-model-hi-0.22'
 ]
 
+# Model language name to language code mapping
 model_languages = {
     'English': 'en-us',
     'English (US)': 'en-us',
@@ -71,3 +72,11 @@ model_languages = {
     'Czech': 'cs',
     'Polish': 'pl'
 }
+
+# Some false positive phrases/words that trigger a chapter marker...will need building over time
+excluded_phrases = [
+    'chapter and verse', 'chapters', 'this chapter',
+    'chapter of', 'in chapter', 'and chapter',
+    'chapter heading', 'chapter head', 'chapter house',
+    'chapter book', 'a chapter', 'chapter out'
+]
