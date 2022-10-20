@@ -6,7 +6,7 @@
 
 Split a single, monolithic mp3 audiobook file into chapters using Machine Learning and ffmpeg.
 
-![demo](https://user-images.githubusercontent.com/47511320/196007691-a488f5a5-2cd8-4058-a582-cf633c537d4f.gif)
+![demo](https://user-images.githubusercontent.com/47511320/196572033-80cfe70c-eb57-4789-a7be-fcb2a03f18c5.gif)
 
 ---
 
@@ -15,9 +15,8 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
 - [Chapterize-Audiobooks](#chapterize-audiobooks)
   - [Table of Contents](#table-of-contents)
   - [About](#about)
-    - [Notes on the Model](#notes-on-the-model)
-    - [Supported Languages](#supported-languages)
   - [Dependencies](#dependencies)
+  - [Supported Languages and Models](#supported-languages-and-models)
   - [Usage](#usage)
     - [Examples](#examples)
   - [Improvement](#improvement)
@@ -26,49 +25,11 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
 
 ## About
 
-This is a simple command line utility that will chapterize your mp3 audiobooks for you. No longer will you have to dissect a waveform to look for chapter breaks, or deal with all the annoyances that come with a single audiobook file. You can use this as an intermediary step to creating m4b files, or keep the files the way they are.
+This is a simple command line utility that will chapterize your mp3 audiobooks for you. No longer will you have to dissect a waveform to look for chapter breaks, or deal with all the annoyances that come with a single audiobook file. You can use this as an intermediary step for creating m4b files, or keep the files the way they are.
 
 The script utilizes the `vosk-api` machine learning library which performs a speech-to-text conversion on the audiobook file, generating timestamps throughout which are stored in a srt (subrip) file. The file is then parsed, searching for phrases like "prologue", "chapter", and "epilogue", which are used as separators for the generated chapter files.
 
 The script will also parse metadata from the source file along with the cover art (if present) and copy it into each chapter file automatically. There are CLI parameters you can use to pass your own ID3-compliant metadata properties, too, which always take precedence over the fields extracted from the file (if there is a conflict). Otherwise, the tags will be combined.
-
-### Notes on the Model
-
-The model used for speech-to-text conversion is really dependent on the quality of the audio. The model included in this
-repo is meant for small distributions on mobile systems, as it is the only one that will fit in a GitHub repository. While it has worked really well in my testing, you can download a larger model [here](https://alphacephei.com/vosk/models); simply replace the directory inside `/model` with the new model directory.
-
-### Supported Languages
-
-The `vosk-api` provides models in several languages. By default, only 'en-us' is provided with this repository, but you can download additional models from [the vosk website](https://alphacephei.com/vosk/models). Simply replace the existing model inside the `/model` directory with the one you wish to use.
-
-The following list provides ths supported language codes at the time of this writing:
-
-- kz
-- en-gb
-- vn
-- es
-- ru
-- de
-- ja
-- cs
-- pl
-- en-in
-- hi
-- en-us
-- pt
-- nl
-- tr
-- ua
-- cn
-- eo
-- tl-ph
-- ar
-- it
-- fr
-- el-gr
-- ca
-- sv
-- fa
 
 ---
 
@@ -79,17 +40,62 @@ The following list provides ths supported language codes at the time of this wri
   - Packages:
     - [rich](https://github.com/Textualize/rich)
     - [vosk](https://github.com/alphacep/vosk-api)
+    - [requests](https://requests.readthedocs.io/en/latest/) (if you want to download models)
 
 To install python dependencies:
+
+> NOTE: If you're on Linux, you might need to use `pip3` instead
 
 ```bash
 # Using the requirements file (recommended)
 pip install -r requirements.txt
 # Manually installing packages
-pip install vosk rich
+pip install vosk rich requests
 ```
 
 It is recommended that you add ffmpeg to your system PATH so you don't have to run the script from the same directory. How you do this depends on your Operating System; consult your OS documentation (if you aren't familiar with the process, it's super easy. Just Google it).
+
+---
+
+## Supported Languages and Models
+
+The `vosk-api` provides models in several languages. By default, only the small 'en-us' model is provided with this repository, but you can download additional models in a variety of languages using the script's `--download_model`/`-dm` parameter, which accepts arguments `small` and `large` (if nothing is passed, it defaults to `small`); if the model isn't English, you must also specify a language using `--language`/`-l` parameter. See [Usage](#usage) for more info.
+
+Not all models are supported, but you can download additional models manually from [the vosk website](https://alphacephei.com/vosk/models) (and other sources listed on the site). Simply replace the existing model inside the `/model` directory with the one you wish to use.
+
+The following is a list of models which can be downloaded using the `--download_model` parameter of the script:
+
+> You can use either the **Language** or **Code** fields to specify a model
+
+| **Language**    | **Code** | **Small** | **Large** |
+|-----------------|----------|-----------|-----------|
+| English (US)    | en-us    | ✓         | ✓         |
+| English (India) | en-in    | ✓         | ✓         |
+| Chinese         | cn       | ✓         | ✓         |
+| Russian         | ru       | ✓         | ✓         |
+| French          | fr       | ✓         | ✓         |
+| German          | de       | ✓         | ✓         |
+| Spanish         | es       | ✓         | ✓         |
+| Portuguese      | pt       | ✓         | ✓         |
+| Greek           | el       | ✕         | ✓         |
+| Turkish         | tr       | ✕         | ✓         |
+| Vietnamese      | vn       | ✓         | ✕         |
+| Italian         | it       | ✓         | ✓         |
+| Dutch           | nl       | ✓         | ✕         |
+| Catalan         | ca       | ✓         | ✕         |
+| Arabic          | ar       | ✕         | ✓         |
+| Farsi           | fa       | ✓         | ✓         |
+| Filipino        | tl-ph    | ✕         | ✓         |
+| Kazakh          | kz       | ✓         | ✓         |
+| Japanese        | ja       | ✓         | ✓         |
+| Ukrainian       | uk       | ✓         | ✓         |
+| Esperanto       | eo       | ✓         | ✕         |
+| Hindi           | hi       | ✓         | ✓         |
+| Czech           | cs       | ✓         | ✕         |
+| Polish          | pl       | ✓         | ✕         |
+
+The model used for speech-to-text the conversion is fairly dependent on the quality of the audio. The model included in this
+repo is meant for small distributions on mobile systems, as it is the only one that will fit in a GitHub repository. If you aren't getting good results, you might want to consider using a larger model (if one is available).
 
 ---
 
@@ -116,7 +122,13 @@ optional arguments:
   DESCRIPTION:         optional path to an existing srt timecode file in a different directory.
                         
   --language [LANGUAGE], -l [LANGUAGE]
-  DESCRIPTION:         model language to use. requires a supported model ('en-us' is provided)        
+  DESCRIPTION:         model language to use. requires a supported model ('en-us' is provided).
+  
+  --model [{small,large}], -m [{small,large}]
+  DESCRIPTION:         model type to use if multiple models are available. default is small.
+  
+  --download_model [{small,large}], -dm [{small,large}]
+  DESCRIPTION          download the model archive specified in the --language parameter     
                         
   --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
   DESCRIPTION:         path to cover art file. Optional.
@@ -153,6 +165,11 @@ PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' -ca 'C:\path\to\c
 ```powershell
 # Set model to use German as the language (requires a different model, see above)
 PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --language 'de'
+```
+
+```bash
+# Download a different model (Italian large used here as an example)
+~$ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --download_model 'large' --language 'it'
 ```
 
 ---
