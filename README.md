@@ -16,10 +16,13 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
   - [Table of Contents](#table-of-contents)
   - [About](#about)
   - [Dependencies](#dependencies)
+    - [ffmpeg](#ffmpeg)
   - [Supported Languages and Models](#supported-languages-and-models)
   - [Usage](#usage)
     - [Examples](#examples)
   - [Improvement](#improvement)
+  - [Known Issues](#known-issues)
+    - [Access Denied Error on Windows](#access-denied-error-on-windows)
 
 ---
 
@@ -53,6 +56,8 @@ pip install -r requirements.txt
 pip install vosk rich requests
 ```
 
+### ffmpeg
+
 It is recommended that you add ffmpeg to your system PATH so you don't have to run the script from the same directory. How you do this depends on your Operating System; consult your OS documentation (if you aren't familiar with the process, it's super easy. Just Google it).
 
 Here is a quick example for Windows using PowerShell (it can be done via GUI, too):
@@ -64,11 +69,24 @@ $newPath = $env:PATH + ";$ffmpeg"
 [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
 ```
 
+Here is a quick example using bash:
+
+```bash
+# Set this equal to wherever ffmpeg is
+ffmpeg="/home/someuser/software/ffmpeg"
+# If you're using zsh, replace with .zshrc
+echo "export PATH=${ffmpeg}:${PATH}" >> ~/.bashrc
+```
+
+If you don't want to deal with all that, you can add the path of ffmpeg to the defaults.toml file included with the repository - copy and paste the full path and set it equal to the `ffmpeg_path` option **using single quotes** `''`.
+
 ---
 
 ## Supported Languages and Models
 
-The `vosk-api` provides models in several languages. By default, only the small 'en-us' model is provided with this repository, but you can download additional models in a variety of languages using the script's `--download_model`/`-dm` parameter, which accepts arguments `small` and `large` (if nothing is passed, it defaults to `small`); if the model isn't English, you must also specify a language using `--language`/`-l` parameter. See [Usage](#usage) for more info.
+> **NOTE**: You can set a default language and model size in the defaults.toml file included with the repository
+
+The `vosk-api` provides models in several languages. By default, only the small 'en-us' model is provided with this repository, but you can download additional models in several languages using the script's `--download_model`/`-dm` parameter, which accepts arguments `small` and `large` (if nothing is passed, it defaults to `small`); if the model isn't English, you must also specify a language using `--language`/`-l` parameter. See [Usage](#usage) for more info.
 
 Not all models are supported, but you can download additional models manually from [the vosk website](https://alphacephei.com/vosk/models) (and other sources listed on the site). Simply replace the existing model inside the `/model` directory with the one you wish to use.
 
@@ -103,8 +121,7 @@ The following is a list of models which can be downloaded using the `--download_
 | Czech           | cs       | ✓         | ✕         |
 | Polish          | pl       | ✓         | ✕         |
 
-The model used for speech-to-text the conversion is fairly dependent on the quality of the audio. The model included in this
-repo is meant for small distributions on mobile systems, as it is the only one that will fit in a GitHub repository. If you aren't getting good results, you might want to consider using a larger model (if one is available).
+The model used for speech-to-text the conversion is fairly dependent on the quality of the audio. The model included in this repo is meant for small distributions on mobile systems, as it is the only one that will fit in a GitHub repository. If you aren't getting good results, you might want to consider using a larger model (if one is available).
 
 ---
 
@@ -119,7 +136,7 @@ usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--language [LA
 
 positional arguments:
 
-  AUDIOBOOK_PATH        Path to audiobook mp3. Required.
+  AUDIOBOOK_PATH          path to audiobook mp3 file. required.
   
 optional argument flags:
 
@@ -129,34 +146,34 @@ optional argument flags:
 optional arguments:
   
   --timecodes_file [TIMECODES_FILE], -tc [TIMECODES_FILE]
-  DESCRIPTION:         optional path to an existing srt timecode file in a different directory.
+  DESCRIPTION:            optional path to an existing srt timecode file in a different directory.
                         
   --language [LANGUAGE], -l [LANGUAGE]
-  DESCRIPTION:         model language to use. requires a supported model ('en-us' is provided).
+  DESCRIPTION:            model language to use. requires a supported model ('en-us' is provided).
   
   --model [{small,large}], -m [{small,large}]
-  DESCRIPTION:         model type to use if multiple models are available. default is small.
+  DESCRIPTION:            model type to use if multiple models are available. default is small.
   
   --download_model [{small,large}], -dm [{small,large}]
-  DESCRIPTION          download the model archive specified in the --language parameter     
+  DESCRIPTION             download the model archive specified in the --language parameter     
                         
   --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
-  DESCRIPTION:         path to cover art file. Optional.
+  DESCRIPTION:            path to cover art file. Optional.
                         
   --author [AUTHOR], -a [AUTHOR]
-  DESCRIPTION:         audiobook author. Optional metadata field.
+  DESCRIPTION:            audiobook author. Optional metadata field.
                         
   --title [TITLE], -t [TITLE]
-  DESCRIPTION:         audiobook title. Optional metadata field.
+  DESCRIPTION:            audiobook title. Optional metadata field.
                         
   --genre [GENRE], -g [GENRE]
-  DESCRIPTION:         audiobook genre. Optional metadata field.
+  DESCRIPTION:            audiobook genre. Optional metadata field.
                         
   --year [YEAR], -y [YEAR]
-  DESCRIPTION:         audiobook release year. Optional metadata field.
+  DESCRIPTION:            audiobook release year. Optional metadata field.
                         
   --comment [COMMENT], -c [COMMENT]
-  DESCRIPTION:         audiobook comment. Optional metadata field.
+  DESCRIPTION:            audiobook comment. Optional metadata field.
 
 ```
 
@@ -179,7 +196,7 @@ PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --language 'de'
 
 ```bash
 # Download a different model (Italian large used here as an example)
-~$ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --download_model 'large' --language 'it'
+~$ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --download_model 'large' --language 'italian'
 ```
 
 ---
@@ -192,3 +209,11 @@ them. With that said, it's been remarkably accurate so far.
 
 I encourage anyone who might use this to report any issues you find, particularly with false positive chapter markers.
 The more false positives identified, the more accurate it will be!
+
+---
+
+## Known Issues
+
+### Access Denied Error on Windows
+
+Every once in a while when downloading a new model on Windows, it will throw an "Access Denied" exception after attempting to rename the extracted file. This isn't really a permissions issue, but rather a concurrency one. I've found that closing any app or Explorer window that might be related to Chapterize-Audiobooks usually fixes this problem. This seems to be a somewhat common issue with Python on Windows when renaming/deleting/moving files.
