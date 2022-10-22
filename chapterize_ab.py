@@ -106,7 +106,7 @@ def verify_download(language: str, model_type: str) -> str:
     lang_code = verify_language(language)
     name = ''
     found = False
-    other = 'small' if model_type == 'large' else 'small'
+    other = 'small' if model_type == 'large' else 'large'
 
     if model_type == 'small':
         for line in models_small:
