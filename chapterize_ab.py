@@ -56,7 +56,7 @@ def path_exists(path: str | Path) -> Path:
     if Path(path).exists():
         return Path(path)
     else:
-        raise FileExistsError(f"The path: <{path}> does not exist")
+        raise FileNotFoundError(f"The path: <{path}> does not exist")
 
 
 def verify_language(language: str) -> str:
