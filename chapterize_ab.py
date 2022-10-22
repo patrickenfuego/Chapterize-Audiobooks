@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import re
 import subprocess
 import argparse
@@ -36,6 +38,8 @@ prog_name = 'Chapterize-Audiobooks'
 prog_version = '0.3.0'
 vosk_url = "https://alphacephei.com/vosk/models"
 vosk_link = f"[link={vosk_url}]this link[/link]"
+# Default to ffmpeg in PATH
+ffmpeg = 'ffmpeg'
 con = Console()
 
 '''
@@ -79,7 +83,8 @@ def verify_language(language: str) -> str:
         con.print("[bold red]ERROR:[/] Language option appears to be empty")
         sys.exit(1)
     elif not found:
-        con.print("[bold red]ERROR:[/] Invalid language or langauge code entered. Possible options:\n")
+        con.print("[bold red]ERROR:[/] Invalid language or langauge code entered. Possible options:")
+        print("\n")
         con.print(Panel(Pretty(model_languages), title="Supported Languages & Codes"))
         print("\n")
         sys.exit(2)
@@ -131,7 +136,7 @@ def verify_download(language: str, model_type: str) -> str:
             f"[bold yellow]WARNING:[/] The selected model cannot be downloaded for '{language}' "
             f"in the specified size '{model_type}'. However, a '{other}' model was found. "
             f"You can re-run the script and choose {other}, or attempt to "
-            f"download a different model manually from [bold blue]{vosk_link}[/]."
+            f"download a different model manually from {vosk_link}."
         )
         sys.exit(3)
     elif not name:
@@ -143,6 +148,21 @@ def verify_download(language: str, model_type: str) -> str:
         sys.exit(3)
 
     return name
+
+
+def parse_config() -> dict:
+    """Parses the toml config file.
+
+    :return: A dictionary containing the config file contents.
+    """
+
+    if (config := Path.cwd().joinpath('defaults.toml')).exists():
+        with open(config, 'r') as fp:
+            lines = fp.readlines()
+        defaults = {k: v for k, v in [l.strip("\n").replace("'", "").split('=') for l in lines if '#' not in l]}
+        return defaults
+    else:
+        return {}
 
 
 '''
@@ -196,9 +216,9 @@ def parse_args():
                         metavar='COMMENT', type=str, help='Audiobook comment. Optional metadata field')
 
     args = parser.parse_args()
+    config = parse_config()
 
     if args.list_languages:
-        con.print("[green]Supported langauge codes:\n")
         con.print(Panel(Pretty(model_languages), title="Supported Languages & Codes"))
         print("\n")
         con.print(
@@ -224,14 +244,32 @@ def parse_args():
     if args.comment:
         meta_fields['comment'] = args.comment
 
-    if model_name and download == 'small':
-        model_type = 'small'
-    elif model_name and download == 'large':
-        model_type = 'large'
-    else:
+    # If the user chooses to download a model
+    if download:
+        model_type = download
+    # If the user passes a value via CLI (overrides config)
+    elif 'model_type' in args:
         model_type = args.model_type
+    # If the config file contains a value
+    elif 'default_model' in config:
+        model_type = config['default_model']
+    else:
+        model_type = 'small'
 
-    return args.audiobook, meta_fields, args.lang, model_name, model_type
+    # If the user passes a language via CLI
+    if 'lang' in args:
+        language = args.lang
+    # Check for a value in the config file
+    elif 'default_language' in config:
+        language = verify_language(config['default_language'])
+    else:
+        language = 'en-us'
+
+    # Parse the config file. if ffmpeg path is present, update the global variable
+    global ffmpeg
+    ffmpeg = Path(config['ffmpeg_path']) if 'ffmpeg_path' in config else 'ffmpeg'
+
+    return args.audiobook, meta_fields, language, model_name, model_type
 
 
 def build_progress(bar_type: str) -> Progress:
@@ -262,8 +300,6 @@ def build_progress(bar_type: str) -> Progress:
             "[progress.percentage]{task.percentage:>3.1f}%",
             "•",
             DownloadColumn()
-            # "•",
-            # TransferSpeedColumn()
         )
     else:
         raise ValueError("Unknown progress bar type")
@@ -272,8 +308,7 @@ def build_progress(bar_type: str) -> Progress:
 
 
 def print_table(list_dicts: list[dict]) -> None:
-    """
-    Formats a list of dictionaries into a table. Currently only used for timecodes.
+    """Formats a list of dictionaries into a table. Currently only used for timecodes.
 
     :param list_dicts: List of dictionaries to format
     :return: None
@@ -311,7 +346,7 @@ def extract_metadata(audiobook: str | Path) -> dict:
 
     metadata_file = audiobook.parent.joinpath('metadata.txt')
     # Extract metadata to file using ffmpeg
-    subprocess.run(['ffmpeg', '-y', '-loglevel', 'quiet', '-i', audiobook,
+    subprocess.run([str(ffmpeg), '-y', '-loglevel', 'quiet', '-i', audiobook,
                     '-f', 'ffmetadata', f'{metadata_file}'])
 
     meta_dict = {}
@@ -343,14 +378,15 @@ def extract_coverart(audiobook: str | Path) -> str | Path | None:
     """
 
     covert_art = str(audiobook).replace('.mp3', '.jpg')
-    subprocess.run(['ffmpeg', '-y', '-loglevel', 'quiet', '-i',
+    subprocess.run([str(ffmpeg), '-y', '-loglevel', 'quiet', '-i',
                     audiobook, '-an', '-c:v', 'copy', covert_art])
     if Path(covert_art).exists() and Path(covert_art).stat().st_size > 10:
         con.print("[bold green]SUCCESS![/] Cover art extracted")
         print("\n")
         return covert_art
     else:
-        con.print("[bold yellow]WARNING:[/] Failed to extract cover art, or none was found\n")
+        con.print("[bold yellow]WARNING:[/] Failed to extract cover art, or none was found")
+        print("\n")
         return None
 
 
@@ -366,7 +402,7 @@ def convert_to_wav(file: str | Path) -> Path:
     wav_file = str(file).replace('.mp3', '.wav')
     con.print("[magenta]Converting file to wav...[/]")
     result = subprocess.run([
-        'ffmpeg', '-i', file, '-ar', '16000', '-ac', '1', wav_file
+        str(ffmpeg), '-i', file, '-ar', '16000', '-ac', '1', wav_file
     ])
 
     print(f"Subprocess result: {result.returncode}")
@@ -387,7 +423,7 @@ def download_model(name: str) -> None:
     out_dir = out_base / name
 
     if out_dir.exists():
-        con.print("[bold yellow]it appears you already have the model downloaded. Sweet!")
+        con.print("[bold yellow]it appears you already have the model downloaded. Sweet![/]")
         return
 
     progress = build_progress(bar_type='download')
@@ -432,7 +468,7 @@ def download_model(name: str) -> None:
             )
             sys.exit(5)
     except Exception as e:
-        print(f"An error occurred while writing or unpacking the model: {e}")
+        con.print(f"[bold red]ERROR:[/] Failed to unpack or rename the model: [red]{e}[/red]")
         sys.exit(29)
 
 
@@ -474,7 +510,7 @@ def convert_time(time: str) -> str:
             parts[-1] = str(int(last) - 1)
     except Exception as e:
         parts, milliseconds = None, None
-        con.print(f"[bold red]ERROR:[/] Could not covert end chapter marker for {time}: [red]{e}[/]")
+        con.print(f"[bold red]ERROR:[/] Could not covert end chapter marker for {time}: [red]{e}[/red]")
         sys.exit(6)
 
     return f"{':'.join(parts)}.{milliseconds}"
@@ -501,7 +537,7 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
                 'NEW LOG START\n'
                 '********************************************************\n\n'
             ])
-    command = ['ffmpeg', '-y', '-hide_banner', '-loglevel', 'info', '-i', f'{str(audiobook)}']
+    command = [str(ffmpeg), '-y', '-hide_banner', '-loglevel', 'info', '-i', f'{str(audiobook)}']
     if cover_art:
         command.extend(['-i', cover_art, '-id3v2_version', '3', '-metadata:s:v',
                         'comment="Cover (front)"'])
@@ -548,7 +584,7 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
             except Exception as e:
                 con.print(
                     f"[bold red]ERROR:[/] An exception occurred writing logs to file: "
-                    f"[red]{e}[/]\nOutputting to stdout..."
+                    f"[red]{e}[/red]\nOutputting to stdout..."
                 )
                 subprocess.run(command_copy, stdout=subprocess.STDOUT)
 
@@ -580,12 +616,13 @@ def generate_timecodes(audiobook: str | Path, language: str, model_type: str) ->
 
     try:
         if model_path := [d for d in model_root.iterdir() if d.is_dir() and language in d.stem]:
-            con.print(f"\n:white_heavy_check_mark: Local ML model found. Language: '{language}'")
+            print("\n")
+            con.print(f":white_heavy_check_mark: Local ML model found. Language: '{language}'")
             # If there is more than 1 model, infer the proper one from the name
             if len(model_path) > 1:
                 con.print(
                     f"[yellow]Multiple models for '{language}' found. "
-                    f"Attempting to use the {model_type} model"
+                    f"Attempting to use the {model_type} model[/yellow]"
                 )
                 if model_type == 'small':
                     model_path = [d for d in model_path if 'small' in d.stem][0]
@@ -607,7 +644,7 @@ def generate_timecodes(audiobook: str | Path, language: str, model_type: str) ->
 
     try:
         # Convert the file to wav (if needed), and stream output to file
-        with subprocess.Popen(["ffmpeg", "-loglevel", "quiet", "-i",
+        with subprocess.Popen([str(ffmpeg), "-loglevel", "quiet", "-i",
                                audiobook,
                                "-ar", str(sample_rate), "-ac", "1", "-f", "s16le", "-"],
                               stdout=subprocess.PIPE).stdout as stream:
@@ -616,7 +653,7 @@ def generate_timecodes(audiobook: str | Path, language: str, model_type: str) ->
 
         con.print("[bold green]SUCCESS![/] Timecode file created\n")
     except Exception as e:
-        con.print(f"[bold red]ERROR:[/] Failed to generate timecode file with vosk: [red]{e}[/]\n")
+        con.print(f"[bold red]ERROR:[/] Failed to generate timecode file with vosk: [red]{e}[/red]\n")
         sys.exit(7)
 
     return Path(out_file)
@@ -688,7 +725,7 @@ def main():
     """
 
     print("\n\n")
-    con.rule("\n[cyan]Starting script[/cyan]")
+    con.rule("[cyan]Starting script[/cyan]")
     print("\n")
     con.print("[magenta]Preparing chapterfying magic[/magenta] :zap:...")
     print("\n")
@@ -696,7 +733,7 @@ def main():
     # Destructure tuple
     audiobook_file, in_metadata, lang, model_name, model_type = parse_args()
     if not str(audiobook_file).endswith('.mp3'):
-        con.print("[bold red]ERROR:[/] The script only works with [bold blue].mp3[/] files (for now)")
+        con.print("[bold red]ERROR:[/] The script only works with .mp3 files (for now)")
         sys.exit(9)
 
     # Extract metadata from input file
@@ -705,11 +742,13 @@ def main():
     parsed_metadata = extract_metadata(audiobook_file)
     # Combine the dicts, overwriting existing keys with user values if passed
     if parsed_metadata and in_metadata:
-        con.print("[magenta]Merging extracted and user metadata[/]...\n")
+        con.print("[magenta]Merging extracted and user metadata[/magenta]...")
+        print("\n")
         parsed_metadata |= in_metadata
     # This should never hit, as genre has a default value in argparse
     elif not in_metadata and not parsed_metadata:
-        con.print("[bold yellow]WARNING:[/] No metadata to append. What a shame\n")
+        con.print("[bold yellow]WARNING:[/] No metadata to append. What a shame")
+        print("\n")
     # No metadata was found in file, using only argparse defaults
     elif in_metadata and not parsed_metadata:
         parsed_metadata = in_metadata
@@ -718,10 +757,10 @@ def main():
     print("\n")
 
     # Search for existing cover art
-    con.rule("[cyan]Discovering Cover Art")
+    con.rule("[cyan]Discovering Cover Art[/cyan]")
     print("\n")
     if not parsed_metadata['cover_art']:
-        con.print("[magenta]Perusing for cover art[/]...")
+        # con.print("[magenta]Perusing for cover art[/magenta]...")
         cover_art = extract_coverart(audiobook_file)
     else:
         if parsed_metadata['cover_art'].exists():
@@ -729,38 +768,40 @@ def main():
             print("\n")
             cover_art = parsed_metadata['cover_art']
         else:
-            con.print("[bold yellow]WARNING:[yellow] Cover art path does not exist")
+            con.print("[bold yellow]WARNING:[/] Cover art path does not exist")
             cover_art = None
 
     # Download model if option selected
     if model_name and lang:
-        con.rule(f"[cyan]Download '{lang} ({model_type})' Model")
+        con.rule(f"[cyan]Download '{lang} ({model_type})' Model[/cyan]")
         print("\n")
-        con.print("[magenta]Preparing download...[/]\n")
+        con.print("[magenta]Preparing download...[/magenta]")
+        print("\n")
         download_model(model_name)
 
     # Generate timecodes from mp3 file
-    con.rule("[cyan]Generate Timecodes")
+    con.rule("[cyan]Generate Timecodes[/cyan]")
     print("\n")
     if model_type == 'small':
-        message = "[magenta]Sit tight, this might take a while[/]..."
+        message = "[magenta]Sit tight, this might take a while[/magenta]..."
     else:
-        message = "[magenta]Sit tight, this might take a [u]long[/u] while[/]..."
+        message = "[magenta]Sit tight, this might take a [u]long[/u] while[/magenta]..."
     with con.status(message, spinner='pong'):
         timecodes_file = generate_timecodes(audiobook_file, lang, model_type)
 
     # Open file and parse timecodes
     with open(timecodes_file, 'r') as fp:
         file_lines = fp.readlines()
-    con.rule("[cyan]Parse Timecodes")
+    con.rule("[cyan]Parse Timecodes[/cyan]")
     print("\n")
     timecodes = parse_timecodes(file_lines)
-    con.print("[bold green]SUCCESS![/] Timecodes parsed\n")
+    con.print("[bold green]SUCCESS![/] Timecodes parsed")
+    print("\n")
     print_table(timecodes)
     print("\n")
 
     # Split the file
-    con.rule("[cyan]Chapterize File")
+    con.rule("[cyan]Chapterize File[/cyan]")
     print("\n")
     split_file(audiobook_file, timecodes, parsed_metadata, cover_art)
     # Count the generated files and compare to timecode dict

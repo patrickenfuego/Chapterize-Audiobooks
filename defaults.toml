@@ -1,0 +1,5 @@
+# Uncomment lines starting with '#' to set config options, or modify an existing line
+default_language='english'
+default_model='small'
+# Defaults to the system's PATH. You can specify a full path in single '' quotes
+ffmpeg_path='ffmpeg'
