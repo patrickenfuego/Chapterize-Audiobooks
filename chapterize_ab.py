@@ -206,10 +206,13 @@ def parse_args():
                         metavar='COVER_ART_PATH', type=path_exists, help='Path to cover art file. Optional')
     parser.add_argument('--author', '-a', dest='author', nargs='?', default=None,
                         metavar='AUTHOR', type=str, help='Author. Optional metadata field')
+    parser.add_argument('--description', '-d', dest='description', nargs='?', default=None,
+                        metavar='DESCRIPTION', type=str, help='Book description. Optional metadata field')
     parser.add_argument('--title', '-t', dest='title', nargs='?', default=None,
                         metavar='TITLE', type=str, help='Audiobook title. Metadata field')
     parser.add_argument('--genre', '-g', dest='genre', nargs='?', default='Audiobook',
-                        metavar='GENRE', type=str, help='Audiobook genre. Optional metadata field')
+                        metavar='GENRE', type=str,
+                        help='Audiobook genre. Separate multiple genres using a semicolon. Optional metadata field')
     parser.add_argument('--year', '-y', dest='year', nargs='?', default=None,
                         metavar='YEAR', type=str, help='Audiobook release year. Optional metadata field')
     parser.add_argument('--comment', '-c', dest='comment', nargs='?', default=None,
@@ -243,6 +246,8 @@ def parse_args():
         meta_fields['date'] = args.year
     if args.comment:
         meta_fields['comment'] = args.comment
+    if args.description:
+        meta_fields['description'] = args.description
 
     # If the user chooses to download a model
     if download:
@@ -558,6 +563,8 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
         command.extend(['-metadata', f"date={metadata['date']}"])
     if 'comment' in metadata:
         command.extend(['-metadata', f"comment={metadata['comment']}"])
+    if 'description' in metadata:
+        command.extend(['-metadata', f"description={metadata['description']}"])
 
     progress = build_progress(bar_type='chapterize')
     with progress:
@@ -565,8 +572,7 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
         for counter, times in enumerate(timecodes, start=1):
             command_copy = command.copy()
             if 'start' in times:
-                start_list = ['-ss', times['start']]
-                command_copy[5:5] = start_list
+                command_copy[5:5] = ['-ss', times['start']]
             if 'end' in times:
                 command_copy[7:7] = ['-to', times['end']]
             if 'chapter_type' in times:
@@ -574,7 +580,8 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
             else:
                 file_path = audiobook.parent.joinpath(f"{file_stem} - {counter}.mp3")
 
-            command_copy.extend([*stream, '-metadata', f"title={times['chapter_type']}",
+            track_num = ['-metadata', f"track={counter}/{len(timecodes)}"]
+            command_copy.extend([*stream, *track_num, '-metadata', f"title={times['chapter_type']}",
                                  f'{file_path}'])
 
             try:
@@ -617,7 +624,7 @@ def generate_timecodes(audiobook: str | Path, language: str, model_type: str) ->
     try:
         if model_path := [d for d in model_root.iterdir() if d.is_dir() and language in d.stem]:
             print("\n")
-            con.print(f":white_heavy_check_mark: Local ML model found. Language: '{language}'")
+            con.print(f":white_heavy_check_mark: Local ML model found. Language: '{language}'\n")
             # If there is more than 1 model, infer the proper one from the name
             if len(model_path) > 1:
                 con.print(
