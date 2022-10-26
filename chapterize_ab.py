@@ -628,6 +628,8 @@ def generate_timecodes(audiobook: str | Path, language: str, model_type: str) ->
                     model_path = [d for d in model_path if 'small' in d.stem][0]
                 else:
                     model_path = [d for d in model_path if 'small' not in d.stem][0]
+            else:
+                model_path = model_path[0]
     except IndexError:
         con.print(
             "[bold yellow]WARNING:[/] Local ML model was not found (did you delete it?) "
