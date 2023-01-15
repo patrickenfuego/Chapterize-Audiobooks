@@ -45,7 +45,7 @@ The script will also parse metadata from the source file along with the cover ar
     - [vosk](https://github.com/alphacep/vosk-api)
     - [requests](https://requests.readthedocs.io/en/latest/) (if you want to download models)
 
-To install python dependencies:
+To install python dependencies, open a command shell and type the following:
 
 > NOTE: If you're on Linux, you might need to use `pip3` instead
 
@@ -78,7 +78,14 @@ ffmpeg="/home/someuser/software/ffmpeg"
 echo "export PATH=${ffmpeg}:${PATH}" >> ~/.bashrc
 ```
 
-If you don't want to deal with all that, you can add the path of ffmpeg to the defaults.toml file included with the repository - copy and paste the full path and set it equal to the `ffmpeg_path` option **using single quotes** `''`.
+If you don't want to deal with all that, you can add the path of ffmpeg to the `defaults.toml` file included with the repository - copy and paste the full path and set it equal to the `ffmpeg_path` option **using single quotes** `''`:
+
+```toml
+# Specfying the path to ffmpeg manually
+ffmpeg_path='C:\Users\SomeUser\Software\ffmpeg.exe'
+# If ffmpeg is added to PATH, leave the file like this
+ffmpeg_path='ffmpeg'
+```
 
 ---
 
@@ -128,11 +135,14 @@ The model used for speech-to-text the conversion is fairly dependent on the qual
 ## Usage
 
 ```ruby
-usage: chapterize_ab.py [-h] [--timecodes_file [TIMECODES_FILE]] [--language [LANGUAGE]]
-                        [--list_languages] [--download_model [{small,large}]]
+usage: chapterize_ab.py [-h] or [--help]
+
+usage: chapterize_ab.py [-ll] or [--list_languages]
+
+usage: chapterize_ab.py [AUDIOBOOK_PATH] [--timecodes_file [TIMECODES_FILE]] [--language [LANGUAGE]]
+                        [--download_model [{small,large}]] [--narrator [NARRATOR]] [--comment [COMMENT]]
                         [--model [{small,large}]] [--cover_art [COVER_ART_PATH]] [--author [AUTHOR]]
-                        [--year [YEAR]] [--title [TITLE]] [--genre [GENRE]] [--comment [COMMENT]]
-                        [AUDIOBOOK_PATH]
+                        [--year [YEAR]] [--title [TITLE]] [--genre [GENRE]]
 
 positional arguments:
 
@@ -145,34 +155,37 @@ optional argument flags:
   
 optional arguments:
   
-  --timecodes_file [TIMECODES_FILE], -tc [TIMECODES_FILE]
+  --timecodes_file, -tc [TIMECODES_FILE]
   DESCRIPTION:            optional path to an existing srt timecode file in a different directory.
                         
-  --language [LANGUAGE], -l [LANGUAGE]
+  --language, -l [LANGUAGE]
   DESCRIPTION:            model language to use. requires a supported model ('en-us' is provided).
   
-  --model [{small,large}], -m [{small,large}]
+  --model, -m [{small,large}]
   DESCRIPTION:            model type to use if multiple models are available. default is small.
   
-  --download_model [{small,large}], -dm [{small,large}]
-  DESCRIPTION             download the model archive specified in the --language parameter     
+  --download_model, -dm [{small,large}]
+  DESCRIPTION:            download the model archive specified in the --language parameter     
                         
-  --cover_art [COVER_ART_PATH], -ca [COVER_ART_PATH]
+  --cover_art, -ca [COVER_ART_PATH]
   DESCRIPTION:            path to cover art file. Optional.
                         
-  --author [AUTHOR], -a [AUTHOR]
+  --author, -a [AUTHOR]
   DESCRIPTION:            audiobook author. Optional metadata field.
+
+   --narrator, -n [NARRATOR]
+  DESCRIPTION:            audiobook narrator (should be compatible with most players). Optional metadata field.
                         
-  --title [TITLE], -t [TITLE]
+  --title, -t [TITLE]
   DESCRIPTION:            audiobook title. Optional metadata field.
                         
-  --genre [GENRE], -g [GENRE]
+  --genre, -g [GENRE]
   DESCRIPTION:            audiobook genre. Optional metadata field.
                         
-  --year [YEAR], -y [YEAR]
+  --year, -y [YEAR]
   DESCRIPTION:            audiobook release year. Optional metadata field.
                         
-  --comment [COMMENT], -c [COMMENT]
+  --comment, -c [COMMENT]
   DESCRIPTION:            audiobook comment. Optional metadata field.
 
 ```
