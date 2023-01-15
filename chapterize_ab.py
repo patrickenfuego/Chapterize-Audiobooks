@@ -210,6 +210,8 @@ def parse_args():
                         metavar='DESCRIPTION', type=str, help='Book description. Optional metadata field')
     parser.add_argument('--title', '-t', dest='title', nargs='?', default=None,
                         metavar='TITLE', type=str, help='Audiobook title. Metadata field')
+    parser.add_argument('--narrator', '-n', dest='narrator', nargs='?', default=None,
+                        metavar='NARRATOR', type=str, help='Narrator of the audiobook. Saves as the "Composer" ID3 tag')
     parser.add_argument('--genre', '-g', dest='genre', nargs='?', default='Audiobook',
                         metavar='GENRE', type=str,
                         help='Audiobook genre. Separate multiple genres using a semicolon. Optional metadata field')
@@ -232,9 +234,17 @@ def parse_args():
         print("\n")
         sys.exit(0)
 
-    if 'download' in args and args.lang:
-        download = 'small' if args.download is None else args.download
+    if 'download' in args:
+        if args.lang == 'en-us':
+            con.print(
+                "[bold yellow]WARNING[/]: [bold green]--download_model[/] was used, but a language was not set. "
+                "the default value [cyan]'en-us'[/] will be used. If you want a different language, use the "
+                "[bold blue]--language[/] option to specify one."
+            )
+
+        download = 'small' if args.download not in ['small', 'large'] else args.download
         model_name = verify_download(args.lang, download)
+
 
     meta_fields = {'cover_art': args.cover_art if args.cover_art else None,
                    'genre': args.genre}
@@ -248,8 +258,10 @@ def parse_args():
         meta_fields['comment'] = args.comment
     if args.description:
         meta_fields['description'] = args.description
+    if args.narrator:
+        meta_fields['narrator'] = args.narrator
 
-    # If the user chooses to download a model
+    # If the user chooses to download a model, and it was verified
     if download:
         model_type = download
     # If the user passes a value via CLI (overrides config)
@@ -565,6 +577,8 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
         command.extend(['-metadata', f"comment={metadata['comment']}"])
     if 'description' in metadata:
         command.extend(['-metadata', f"description={metadata['description']}"])
+    if 'narrator' in metadata:
+        command.extend(['-metadata', f"composer={metadata['narrator']}"])
 
     progress = build_progress(bar_type='chapterize')
     with progress:
@@ -674,6 +688,7 @@ def parse_timecodes(content: list) -> list[dict]:
     as well as chapter type (prologue, epilogue, etc.) if available.
 
     :param content: List of timecodes extracted from the output of vosk
+    :param start_only: Return only the start codes (for making a chapter file)
     :return: A list of dictionaries containing start, end, and chapter type data
     """
 
@@ -703,6 +718,7 @@ def parse_timecodes(content: list) -> list[dict]:
                     chapter_type = 'Prologue'
                 else:
                     chapter_type = ''
+
                 # Build dict with start codes and marker
                 if len(timecodes) == 0:
                     time_dict = {'start': '00:00:00', 'chapter_type': chapter_type}
@@ -714,6 +730,7 @@ def parse_timecodes(content: list) -> list[dict]:
                 continue
         else:
             continue
+
     # Add end key based on end time of next chapter minus one second for overlap
     for i, d in enumerate(timecodes):
         if i != len(timecodes) - 1:
@@ -813,6 +830,7 @@ def main():
     con.rule("[cyan]Chapterize File[/cyan]")
     print("\n")
     split_file(audiobook_file, timecodes, parsed_metadata, cover_art)
+
     # Count the generated files and compare to timecode dict
     file_count = (sum(1 for x in audiobook_file.parent.glob('*.mp3') if x.stem != audiobook_file.stem))
     expected = len(timecodes)
