@@ -1,5 +1,5 @@
 <a href="https://github.com/patrickenfuego/Chapterize-Audiobooks"><img alt="GitHub release (latest SemVer)" src="https://img.shields.io/github/v/release/patrickenfuego/Chapterize-Audiobooks"><a/>
-<a href="https://github.com/patrickenfuego/Chapterize-Audiobooks"><img alt="python" src="https://img.shields.io/badge/python-v3.9%2B-blue"><a/>
+<a href="https://github.com/patrickenfuego/Chapterize-Audiobooks"><img alt="python" src="https://img.shields.io/badge/python-v3.10%2B-blue"><a/>
 <a href="https://github.com/patrickenfuego/Chapterize-Audiobooks"><img src="https://img.shields.io/badge/platform-win | linux | mac-eeeeee"><a/>
 
 # Chapterize-Audiobooks
