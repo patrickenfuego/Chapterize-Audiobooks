@@ -39,7 +39,7 @@ The script will also parse metadata from the source file along with the cover ar
 ## Dependencies
 
 - [ffmpeg](https://ffmpeg.org/)
-- [python](https://www.python.org/downloads/) 3.9+
+- [python](https://www.python.org/downloads/) 3.10+
   - Packages:
     - [rich](https://github.com/Textualize/rich)
     - [vosk](https://github.com/alphacep/vosk-api)
