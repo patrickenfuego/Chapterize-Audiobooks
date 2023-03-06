@@ -4,9 +4,8 @@ import re
 import subprocess
 import argparse
 import sys
-import requests
 from shutil import unpack_archive, copytree, rmtree
-from typing import Optional
+from typing import Optional, TypeVar
 from pathlib import Path
 from rich.console import Console
 from rich.pretty import Pretty
@@ -34,8 +33,10 @@ from model.models import (
     Globals
 '''
 
-prog_name = 'Chapterize-Audiobooks'
-prog_version = '0.3.0'
+__version__ = '0.4.0'
+__author__ = 'patrickenfuego'
+
+PathLike = TypeVar('PathLike', Path, str, None)
 vosk_url = "https://alphacephei.com/vosk/models"
 vosk_link = f"[link={vosk_url}]this link[/link]"
 # Default to ffmpeg in PATH
@@ -47,7 +48,7 @@ con = Console()
 '''
 
 
-def path_exists(path: str | Path) -> Path:
+def path_exists(path: PathLike) -> Path:
     """Utility function to check if a path exists. Used by argparse.
 
     :param path: File path to verify
@@ -162,6 +163,8 @@ def parse_config() -> dict:
         defaults = {k: v for k, v in [l.strip("\n").replace("'", "").split('=') for l in lines if '#' not in l]}
         return defaults
     else:
+        con.print("[bold red]ERROR:[/] Could not locate [blue]defaults.toml[/] file. Did you move or delete it?")
+        print("\n")
         return {}
 
 
@@ -188,7 +191,7 @@ def parse_args():
         '''
     )
     parser.add_argument('audiobook', nargs='?', metavar='AUDIOBOOK_PATH',
-                        type=path_exists, help='Path to audiobook file. Required')
+                        type=path_exists, help='Path to audiobook file. Positional argument. Required')
     parser.add_argument('--timecodes_file', '-tc', nargs='?', metavar='TIMECODES_FILE',
                         type=path_exists, dest='timecodes',
                         help='Path to generated srt timecode file (if ran previously in a different directory)')
@@ -214,11 +217,15 @@ def parse_args():
                         metavar='NARRATOR', type=str, help='Narrator of the audiobook. Saves as the "Composer" ID3 tag')
     parser.add_argument('--genre', '-g', dest='genre', nargs='?', default='Audiobook',
                         metavar='GENRE', type=str,
-                        help='Audiobook genre. Separate multiple genres using a semicolon. Optional metadata field')
+                        help='Audiobook genre. Separate multiple genres using a semicolon. Multiple genres can be passed as a string delimited by ";". Optional metadata field')
     parser.add_argument('--year', '-y', dest='year', nargs='?', default=None,
                         metavar='YEAR', type=str, help='Audiobook release year. Optional metadata field')
     parser.add_argument('--comment', '-c', dest='comment', nargs='?', default=None,
                         metavar='COMMENT', type=str, help='Audiobook comment. Optional metadata field')
+    parser.add_argument('--write_cue_file', '-wc', action='store_true', dest='write_cue',
+                        help='Generate a cue file in the audiobook directory for editing chapter markers. Can also be set in defaults.toml. Default disabled')
+    parser.add_argument('--cue_path', '-cp', nargs='?', default=None, metavar='CUE_PATH', type=path_exists,
+                        help='Path to cue file in non-default location (i.e., not in the audiobook directory) containing chapter timecodes. Can also be set in defaults.toml, which has lesser precedence than this argument')
 
     args = parser.parse_args()
     config = parse_config()
@@ -273,6 +280,39 @@ def parse_args():
     else:
         model_type = 'small'
 
+    # Check if cue file write is enabled, if custom path was passed, or if cue already exists
+    if args.cue_path:
+        cue_file = args.cue_path
+        con.print(
+            f"[bright_magenta]Cue file <<[/] [blue]custom path[/]: Reading cue file from [green]{cue_file}[/]"
+        )
+    elif config['cue_path']:
+        if not Path(config['cue_path']).exists():
+            con.print(
+                "[bold yellow]WARNING[/]: Cue file in [blue]defaults.toml[/] does not exist and will be skipped"
+            )
+            cue_file = None
+        else:
+            cue_file = Path(config['cue_path'])
+            con.print(
+                f"[bright_magenta]Cue file <<[/] [blue]default.toml[/]: Reading cue file from [green]{cue_file}[/]"
+            )
+    elif (
+            args.write_cue or
+            config['generate_cue_file'] == 'True' or
+            args.audiobook.with_suffix('.cue').exists() and
+            not args.cue_path
+        ):
+
+        cue_file = args.audiobook.with_suffix('.cue')
+        method = ('Writing', 'to') if args.write_cue else ('Reading', 'from')
+        con.print(f"[bright_magenta]Cue file[/]: {method[0]} cue file {method[1]} [green]{cue_file}[/]")
+    else:
+        cue_file = None
+
+    if cue_file:
+        print("\n")
+
     # If the user passes a language via CLI
     if 'lang' in args:
         language = args.lang
@@ -282,11 +322,18 @@ def parse_args():
     else:
         language = 'en-us'
 
-    # Parse the config file. if ffmpeg path is present, update the global variable
+    # Parse the ffmpeg from config file. if ffmpeg path is present, update the global variable
     global ffmpeg
-    ffmpeg = Path(config['ffmpeg_path']) if 'ffmpeg_path' in config else 'ffmpeg'
+    if config['ffmpeg_path'] and config['ffmpeg_path'] != 'ffmpeg':
+        if Path(config['ffmpeg_path']).exists():
+            ffmpeg = Path(config['ffmpeg_path'])
+        else:
+            con.print("[bold red]CRITICAL[/]: ffmpeg path in [blue]defaults.toml[/] does not exist")
+            sys.exit(1)
+    else:
+        ffmpeg = 'ffmpeg'
 
-    return args.audiobook, meta_fields, language, model_name, model_type
+    return args.audiobook, meta_fields, language, model_name, model_type, cue_file
 
 
 def build_progress(bar_type: str) -> Progress:
@@ -295,6 +342,7 @@ def build_progress(bar_type: str) -> Progress:
     :param bar_type: Type of progress bar.
     :return: a Progress object
     """
+
     text_column = TextColumn(
         "[bold blue]{task.fields[verb]}[/] [bold magenta]{task.fields[noun]}",
         justify="right"
@@ -354,7 +402,7 @@ def print_table(list_dicts: list[dict]) -> None:
     con.print(table)
 
 
-def extract_metadata(audiobook: str | Path) -> dict:
+def extract_metadata(audiobook: PathLike) -> dict:
     """Extracts existing metadata from the input file.
 
     :param audiobook: Path to the input audiobook file
@@ -387,7 +435,7 @@ def extract_metadata(audiobook: str | Path) -> dict:
     return meta_dict
 
 
-def extract_coverart(audiobook: str | Path) -> str | Path | None:
+def extract_coverart(audiobook: PathLike) -> str | Path | None:
     """Extract coverart file from audiobook if present.
 
     :param audiobook: Input audiobook file
@@ -407,7 +455,7 @@ def extract_coverart(audiobook: str | Path) -> str | Path | None:
         return None
 
 
-def convert_to_wav(file: str | Path) -> Path:
+def convert_to_wav(file: PathLike) -> Path:
     """
     Convert input file to lossless wav format. Currently unused, but might be useful for
     legacy versions of vosk.
@@ -434,6 +482,8 @@ def download_model(name: str) -> None:
     :return: None
     """
 
+    import requests
+
     full = f'{vosk_url}/{name}.zip'
     out_base = Path('__file__').parent.absolute() / 'model'
     out_zip = out_base / f'{name}.zip'
@@ -446,7 +496,7 @@ def download_model(name: str) -> None:
     progress = build_progress(bar_type='download')
     with requests.get(full, stream=True, allow_redirects=True) as req:
         if req.status_code != 200:
-            raise ConnectionError("Failed to download the model file: ", full)
+            raise ConnectionError(f"Failed to download the model file: {full}")
 
         size = int(req.headers.get('Content-Length'))
         chunk_size = 50 if 'small' in name else 300
@@ -533,8 +583,11 @@ def convert_time(time: str) -> str:
     return f"{':'.join(parts)}.{milliseconds}"
 
 
-def split_file(audiobook: str | Path, timecodes: list[dict],
-               metadata: dict, cover_art: Optional[str]) -> None:
+def split_file(audiobook: PathLike,
+               timecodes: list[dict],
+               metadata: dict,
+               cover_art: Optional[str]) -> None:
+
     """Splits a single .mp3 file into chapterized segments.
 
     :param audiobook: Path to original .mp3 audiobook
@@ -554,7 +607,7 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
                 'NEW LOG START\n'
                 '********************************************************\n\n'
             ])
-    command = [str(ffmpeg), '-y', '-hide_banner', '-loglevel', 'info', '-i', f'{str(audiobook)}']
+    command = [ffmpeg, '-y', '-hide_banner', '-loglevel', 'info', '-i', f'{str(audiobook)}']
     if cover_art:
         command.extend(['-i', cover_art, '-id3v2_version', '3', '-metadata:s:v',
                         'comment="Cover (front)"'])
@@ -584,6 +637,7 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
     with progress:
         task = progress.add_task('', total=len(timecodes), verb='Processing', noun='Audiobook...')
         for counter, times in enumerate(timecodes, start=1):
+            counter = f'0{counter}' if counter < 10 else counter
             command_copy = command.copy()
             if 'start' in times:
                 command_copy[5:5] = ['-ss', times['start']]
@@ -615,7 +669,7 @@ def split_file(audiobook: str | Path, timecodes: list[dict],
             progress.update(task, advance=1)
 
 
-def generate_timecodes(audiobook: str | Path, language: str, model_type: str) -> Path:
+def generate_timecodes(audiobook: PathLike, language: str, model_type: str) -> Path:
     """Generate chapter timecodes using vosk Machine Learning API.
 
     :param audiobook: Path to input audiobook file
@@ -688,12 +742,12 @@ def parse_timecodes(content: list) -> list[dict]:
     as well as chapter type (prologue, epilogue, etc.) if available.
 
     :param content: List of timecodes extracted from the output of vosk
-    :param start_only: Return only the start codes (for making a chapter file)
     :return: A list of dictionaries containing start, end, and chapter type data
     """
 
     timecodes = []
     counter = 1
+    markers = ('chapter', 'prologue', 'epilogue')
 
     for i, line in enumerate(content):
         if (
@@ -702,20 +756,20 @@ def parse_timecodes(content: list) -> list[dict]:
                 # Doesn't contain an excluded phrase
                 not any(x in content[i+1] for x in excluded_phrases) and
                 # Contains a chapter substring
-                ('chapter' in content[i+1] or
-                 'prologue' in content[i+1] or
-                 'epilogue' in content[i+1])
+                any(m in content[i+1] for m in markers)
         ):
             if start_regexp := re.search(r'\d\d:\d\d:\d\d,\d+(?=\s-)', line, flags=0):
                 start = start_regexp.group(0).replace(',', '.')
 
-                if 'epilogue' in content[i+1]:
+                if 'prologue' in content[i+1]:
+                    chapter_type = 'Prologue'
+                elif 'epilogue' in content[i+1]:
                     chapter_type = 'Epilogue'
                 elif 'chapter' in content[i+1]:
-                    chapter_type = f'Chapter {counter}'
+                    # Add leading zero for better sorting if < 10
+                    chapter_count = f'0{counter}' if counter < 10 else f'{counter}'
+                    chapter_type = f'Chapter {chapter_count}'
                     counter += 1
-                elif 'prologue' in content[i+1]:
-                    chapter_type = 'Prologue'
                 else:
                     chapter_type = ''
 
@@ -743,6 +797,84 @@ def parse_timecodes(content: list) -> list[dict]:
         sys.exit(8)
 
 
+def write_cue_file(timecodes: list[dict], cue_path: Path) -> bool:
+    """Write audiobook timecodes to a cue file.
+
+    Cue files can be created using the `-write_cue_file`/`-wc` argument. This provides the user with an
+    easy interface for adding, modifying, or deleting chapter names, start, and end timecodes, which is
+    useful when the ML speech-to-text misses or inaccurately labels a section.
+
+    :param timecodes: Parsed timecodes to be written to the cue file
+    :param cue_path: Path to cue file
+    :return: Boolean success/failure flag
+    """
+
+    try:
+        with open(cue_path, 'x') as fp:
+            fp.write(f'FILE "{cue_path.stem}.mp3" MP3\n')
+            for i, time in enumerate(timecodes, start=1):
+
+                fp.writelines([
+                    f"TRACK {i} AUDIO\n",
+                    f'  TITLE\t"{time["chapter_type"]}"\n',
+                    f"  START\t{time['start']}\n"
+                ])
+                if i != len(timecodes):
+                    fp.write(f"  END\t\t{time['end']}\n")
+    except OSError as e:
+        con.print(f"[bold red]ERROR[/]: Failed to write cue file: [red]{e}[/]")
+        # Delete cue file to prevent parsing error if partially written
+        if cue_path.exists():
+            cue_path.unlink()
+        return False
+
+    return True
+
+def read_cue_file(cue_path: Path) -> list[dict] | None:
+    """Read audiobook timecodes from a cue file.
+
+    Cue files can be created using the `-write_cue_file` argument. After creation, the cue file is
+    used exclusively for reading timecodes unless an error occurs or the file is moved/renamed/deleted.
+
+    :param cue_path: Path to cue file
+    :return: List of timecodes in dictionary form
+    """
+
+    timecodes = []
+    time_dict = {}
+
+    with open(cue_path, 'r') as fp:
+        content = fp.readlines()
+    content = [l.strip('\n') for l in content]
+
+    for i, line in enumerate(content[1:]):
+        try:
+            if 'TITLE' in line:
+                time_dict['chapter_type'] = re.search(r'TITLE\t"(.*)"', line)[1]
+            if 'START' in line:
+                time_dict['start'] = re.search(r'START\t(.+)', line)[1]
+            if 'END' in line and i != len(content) - 1:
+                time_dict['end'] = re.search(r'END\t+(.+)', line)[1]
+        except (ValueError, IndexError) as e:
+            con.print(f"[bold red]ERROR:[/] Failed to match line: [red]{e}[/]. Returning...")
+            return None
+
+        if 'TRACK' in content[i+1] and time_dict:
+            timecodes.append(time_dict)
+            time_dict = {}
+        elif line == content[-1]:
+            timecodes.append(time_dict)
+
+    if timecodes:
+        return timecodes
+    else:
+        con.print(
+            f"[bold red]ERROR:[/] Timecodes read from cue file cannot be empty. "
+            "Timecodes will be parsed normally until the error is corrected."
+        )
+        return None
+
+
 def main():
     """
     Main driver function.
@@ -757,7 +889,7 @@ def main():
     print("\n")
 
     # Destructure tuple
-    audiobook_file, in_metadata, lang, model_name, model_type = parse_args()
+    audiobook_file, in_metadata, lang, model_name, model_type, cue_file = parse_args()
     if not str(audiobook_file).endswith('.mp3'):
         con.print("[bold red]ERROR:[/] The script only works with .mp3 files (for now)")
         sys.exit(9)
@@ -815,16 +947,44 @@ def main():
     with con.status(message, spinner='pong'):
         timecodes_file = generate_timecodes(audiobook_file, lang, model_type)
 
-    # Open file and parse timecodes
-    with open(timecodes_file, 'r') as fp:
-        file_lines = fp.readlines()
-    con.rule("[cyan]Parse Timecodes[/cyan]")
-    print("\n")
-    timecodes = parse_timecodes(file_lines)
-    con.print("[bold green]SUCCESS![/] Timecodes parsed")
+    # If cue file exists, read timecodes from file
+    if cue_file and cue_file.exists():
+        con.rule("[cyan]Read Cue File[/cyan]")
+        print("\n")
+
+        if (timecodes := read_cue_file(cue_file)) is not None:
+            con.print("[bold green]SUCCESS![/] Timecodes parsed from cue file")
+    else:
+        timecodes = None
+
+    # If timecodes not parsed from cue file, parse from srt
+    if not timecodes:
+        # Open file and parse timecodes
+        with open(timecodes_file, 'r') as fp:
+            file_lines = fp.readlines()
+        con.rule("[cyan]Parse Timecodes[/cyan]")
+        print("\n")
+
+        timecodes = parse_timecodes(file_lines)
+        con.print("[bold green]SUCCESS![/] Timecodes parsed")
+
+    # Print timecodes table
     print("\n")
     print_table(timecodes)
     print("\n")
+
+    # Generate cue file if selected and one doesn't already exist
+    con.rule("[cyan]Write Cue File[/cyan]")
+    print("\n")
+    if cue_file and not cue_file.exists():
+        if (success := write_cue_file(timecodes, cue_file)) is True:
+            con.print("[bold green]SUCCESS![/] Cue file created")
+            print("\n")
+    elif cue_file and cue_file.exists():
+        con.print(
+            "[italic yellow]An existing cue file was found. Move, delete, or rename it to generate a new one[/]"
+        )
+        print("\n")
 
     # Split the file
     con.rule("[cyan]Chapterize File[/cyan]")

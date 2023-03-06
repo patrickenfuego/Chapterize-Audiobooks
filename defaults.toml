@@ -1,5 +1,15 @@
-# Uncomment lines starting with '#' to set config options, or modify an existing line
+# Uncomment lines starting with '#' to set config options, or modify an existing line.
+# No spaces before/after the '='!
+#
+# Default model language
 default_language='english'
+# Default model size
 default_model='small'
 # Defaults to the system's PATH. You can specify a full path in single '' quotes
 ffmpeg_path='ffmpeg'
+# Change this to true if you always want the script to generate a cue file
+generate_cue_file='False'
+# Set this to the cue file path you want to use. Useful for continuous edits and script runs where the cue file
+# is saved somewhere other than the current audiobook directory (the default search path). The cue_path script
+# argument takes precedence over this path if used
+cue_path=''
