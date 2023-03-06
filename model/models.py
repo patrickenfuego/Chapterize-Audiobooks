@@ -1,4 +1,4 @@
-models_small = [
+models_small = (
     'vosk-model-small-en-us-0.15',
     'vosk-model-small-en-in-0.4',
     'vosk-model-small-cn-0.22',
@@ -20,9 +20,9 @@ models_small = [
     'vosk-model-small-hi-0.22',
     'vosk-model-small-cs-0.4-rhasspy',
     'vosk-model-small-pl-0.22'
-]
+)
 
-models_large = [
+models_large = (
     'vosk-model-en-us-0.22',
     'vosk-model-en-in-0.5',
     'vosk-model-cn-0.22',
@@ -40,7 +40,7 @@ models_large = [
     'vosk-model-kz-0.15',
     'vosk-model-ja-0.22',
     'vosk-model-hi-0.22'
-]
+)
 
 # Model language name to language code mapping
 model_languages = {
@@ -74,9 +74,9 @@ model_languages = {
 }
 
 # Some false positive phrases/words that trigger a chapter marker...will need building over time
-excluded_phrases = [
+excluded_phrases = (
     'chapter and verse', 'chapters', 'this chapter',
     'chapter of', 'in chapter', 'and chapter',
     'chapter heading', 'chapter head', 'chapter house',
-    'chapter book', 'a chapter', 'chapter out'
-]
+    'chapter book', 'a chapter', 'chapter out', 'particular chapter'
+)
