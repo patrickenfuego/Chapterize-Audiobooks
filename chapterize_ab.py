@@ -33,7 +33,7 @@ from model.models import (
     Globals
 '''
 
-__version__ = '0.4.0'
+__version__ = '0.5.0'
 __author__ = 'patrickenfuego'
 
 PathLike = TypeVar('PathLike', Path, str, None)

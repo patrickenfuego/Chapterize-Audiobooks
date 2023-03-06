@@ -51,7 +51,7 @@ Cue files can be created to make editing chapter markers and start/stop timecode
 
 Cue files are always generated within the same directory as the audiobook itself, but there are arguments which allow you to specify a custom path to a cue file if it is inconvenient to keep them paired with the audiobook.
 
-Cue file syntax is generated in a somewhat unconventional way to make script parsing easier, but are similar enough that they can be converted to a standard `.cue` format fairly easily.
+Cue file syntax is generated in a somewhat unconventional way to make script parsing easier, but is similar enough that it can be converted to a standard `.cue` format fairly easily.
 
 ### Configuration File
 
