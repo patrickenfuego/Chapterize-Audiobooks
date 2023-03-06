@@ -15,12 +15,17 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
 - [Chapterize-Audiobooks](#chapterize-audiobooks)
   - [Table of Contents](#table-of-contents)
   - [About](#about)
+    - [Machine Learning](#machine-learning)
+    - [Metadata Parsing](#metadata-parsing)
+    - [Cue files](#cue-files)
+    - [Configuration File](#configuration-file)
   - [Dependencies](#dependencies)
     - [ffmpeg](#ffmpeg)
   - [Supported Languages and Models](#supported-languages-and-models)
   - [Usage](#usage)
     - [Examples](#examples)
   - [Improvement](#improvement)
+    - [Other Languages](#other-languages)
   - [Known Issues](#known-issues)
     - [Access Denied Error on Windows](#access-denied-error-on-windows)
 
@@ -28,11 +33,49 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
 
 ## About
 
-This is a simple command line utility that will chapterize your mp3 audiobooks for you. No longer will you have to dissect a waveform to look for chapter breaks, or deal with all the annoyances that come with a single audiobook file. You can use this as an intermediary step for creating m4b files, or keep the files the way they are.
+This is a simple command line utility that will chapterize your mp3 audiobooks for you. No longer will you have to dissect a waveform to look for chapter breaks, or deal with all the annoyances that come with a single audiobook file. 
+
+You can use this as an intermediary step for creating .m4b files, or keep the files the way they are if you don't want to sacrifice audio quality through re-encoding (or prefer .mp3 files for some reason).
+
+### Machine Learning
 
 The script utilizes the `vosk-api` machine learning library which performs a speech-to-text conversion on the audiobook file, generating timestamps throughout which are stored in a srt (subrip) file. The file is then parsed, searching for phrases like "prologue", "chapter", and "epilogue", which are used as separators for the generated chapter files.
 
-The script will also parse metadata from the source file along with the cover art (if present) and copy it into each chapter file automatically. There are CLI parameters you can use to pass your own ID3-compliant metadata properties, too, which always take precedence over the fields extracted from the file (if there is a conflict). Otherwise, the tags will be combined.
+### Metadata Parsing
+
+The script will also parse metadata from the source file along with the cover art (if present) and copy it into each chapter file automatically. There are CLI parameters you can use to pass your own ID3-compliant metadata properties, too, which always take precedence over the fields extracted from the source file (if there is a conflict). Otherwise, the tags will be combined and added to the final output.
+
+### Cue files
+
+Cue files can be created to make editing chapter markers and start/stop timecodes easier. This is especially useful if the machine learning speech-to-text conversion misses a section, timecodes require tweaking, or if you wish to add additional breakpoint sections (such as 'forward' or 'aftermath') which are not currently supported by the script's parsing engine (and may not be supported anytime soon due to the difficulty required to make them work consistently without breaking other stuff).
+
+Cue files are always generated within the same directory as the audiobook itself, but there are arguments which allow you to specify a custom path to a cue file if it is inconvenient to keep them paired with the audiobook.
+
+Cue file syntax is generated in a somewhat unconventional way to make script parsing easier, but are similar enough that they can be converted to a standard `.cue` format fairly easily.
+
+### Configuration File
+
+Included with this project is a `defaults.toml` file which you can use to specify configurations that you use frequently. This removes the need to pass certain CLI argument each time you run the script and provides options for specifying file paths (such as the path to `ffmpeg` if you don't feel like setting environment variables - see below).
+
+Here is the base template included with the project:
+
+```toml
+# Uncomment lines starting with '#' to set config options, or modify an existing line.
+# No spaces before/after the '='!
+#
+# Default model language
+default_language='english'
+# Default model size
+default_model='small'
+# Defaults to the system's PATH. You can specify a full path in single '' quotes
+ffmpeg_path='ffmpeg'
+# Change this to True if you always want the script to generate a cue file
+generate_cue_file='False'
+# Set this to the cue file path you want to use. Useful for continuous edits and script runs where the cue file
+# is saved somewhere other than the current audiobook directory (the default search path). The cue_path script
+# argument takes precedence over this path if used
+cue_path=''
+```
 
 ---
 
@@ -47,7 +90,7 @@ The script will also parse metadata from the source file along with the cover ar
 
 To install python dependencies, open a command shell and type the following:
 
-> NOTE: If you're on Linux, you might need to use `pip3` instead
+> **NOTE**: If you're on Linux, you might need to use `pip3` instead
 
 ```bash
 # Using the requirements file (recommended)
@@ -134,6 +177,8 @@ The model used for speech-to-text the conversion is fairly dependent on the qual
 
 ## Usage
 
+> **NOTE**: Each argument has a shortened alias. All examples use the full argument name for clarity, but it's often more convenient to use the aliases!
+
 ```ruby
 usage: chapterize_ab.py [-h] or [--help]
 
@@ -142,16 +187,21 @@ usage: chapterize_ab.py [-ll] or [--list_languages]
 usage: chapterize_ab.py [AUDIOBOOK_PATH] [--timecodes_file [TIMECODES_FILE]] [--language [LANGUAGE]]
                         [--download_model [{small,large}]] [--narrator [NARRATOR]] [--comment [COMMENT]]
                         [--model [{small,large}]] [--cover_art [COVER_ART_PATH]] [--author [AUTHOR]]
-                        [--year [YEAR]] [--title [TITLE]] [--genre [GENRE]]
+                        [--year [YEAR]] [--title [TITLE]] [--genre [GENRE]] [--write_cue_file]
+                        [--cue_path [CUE_PATH]]
 
 positional arguments:
 
   AUDIOBOOK_PATH          path to audiobook mp3 file. required.
   
+
 optional argument flags:
 
-  -h, --help              show this help message and exit.
+  -h, --help              show help message with usage examples and exit.
   -ll, --list_languages   list supported languages and exit.
+  -wc, --write_cue_file   Generate a cue file in the audiobook directory for editing chapter markers. Default disabled,
+                          but can be enabled permanently through defaults.toml.
+                          
   
 optional arguments:
   
@@ -188,6 +238,11 @@ optional arguments:
   --comment, -c [COMMENT]
   DESCRIPTION:            audiobook comment. Optional metadata field.
 
+  --cue_path, -cp [CUE_PATH]
+  DESCRIPTION:            Path to cue file in non-default location (i.e., not in the audiobook directory) containing 
+                          chapter timecodes. Can also be set in defaults.toml, which has lesser precedence than this
+                          argument.
+                        
 ```
 
 ### Examples
@@ -212,6 +267,16 @@ PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --language 'de'
 ~$ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --download_model 'large' --language 'italian'
 ```
 
+```powershell
+# Write a cue file inside the audiobook directory using the --write_cue_file option flag
+PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --write_cue_file
+```
+
+```bash
+# Specify custom path to a cue file. Overrides the default search path (audiobook directory)
+~$ python3 ./chapterize_ab.py '/path/to/audiobook/file.mp3' --cue_file '/path/to/file.cue'
+```
+
 ---
 
 ## Improvement
@@ -222,6 +287,10 @@ them. With that said, it's been remarkably accurate so far.
 
 I encourage anyone who might use this to report any issues you find, particularly with false positive chapter markers.
 The more false positives identified, the more accurate it will be!
+
+### Other Languages
+
+So far, the excluded phrases list for false positive chapter markers is targeted toward English audiobooks only. However, if you want to contribute an exclusion list for other languages (preferably vosk supported languages), please do! Open a pull request (or send them to me in a GitHub issue) and I'll gladly merge them into the project.
 
 ---
 
