@@ -74,9 +74,10 @@ model_languages = {
 }
 
 # Some false positive phrases/words that trigger a chapter marker...will need building over time
-excluded_phrases = (
-    'chapter and verse', 'chapters', 'this chapter',
-    'chapter of', 'in chapter', 'and chapter',
-    'chapter heading', 'chapter head', 'chapter house',
-    'chapter book', 'a chapter', 'chapter out', 'particular chapter'
+excluded_phrases_english = (
+    'chapter and verse', 'chapters', 'this chapter', 'that chapter',
+    'chapter of', 'in chapter', 'and chapter', 'chapter heading',
+    'chapter head', 'chapter house', 'chapter book', 'a chapter',
+    'chapter out', 'chapter in', 'particular chapter', 'spicy chapter',
+    'before chapter'
 )
