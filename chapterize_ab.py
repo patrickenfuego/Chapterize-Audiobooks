@@ -6,6 +6,13 @@ import argparse
 import sys
 from typing import Optional, TypeVar
 from pathlib import Path
+from shutil import (
+    unpack_archive,
+    copytree,
+    rmtree,
+    which
+)
+
 from rich.console import Console
 from rich.pretty import Pretty
 from rich.panel import Panel
@@ -18,12 +25,6 @@ from rich.progress import (
     TextColumn,
     MofNCompleteColumn
 )
-from shutil import (
-    unpack_archive,
-    copytree,
-    rmtree,
-    which
-)
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
 # Local imports
@@ -31,7 +32,7 @@ from model.models import (
     models_small,
     models_large,
     model_languages,
-    excluded_phrases_english
+    get_language_features
 )
 
 '''
@@ -151,7 +152,7 @@ def verify_download(language: str, model_type: str) -> str:
             f"in size {model_type}. You can try and download a different model manually "
             f"from {vosk_link}."
         )
-        sys.exit(3)
+        sys.exit(33)
 
     return name
 
@@ -239,7 +240,7 @@ def parse_args():
         con.print(Panel(Pretty(model_languages), title="Supported Languages & Codes"))
         print("\n")
         con.print(
-            "[bold yellow]NOTE:[/] The languages listed are supported by the "
+            "[yellow]NOTE:[/] The languages listed are supported by the "
             "[bold green]--download_model[/]/[bold green]-dm[/] parameter (either small, large, or both). "
             f"You can find additional models at {vosk_link}."
         )
@@ -249,7 +250,7 @@ def parse_args():
     if 'download' in args:
         if args.lang == 'en-us':
             con.print(
-                "[bold yellow]WARNING[/]: [bold green]--download_model[/] was used, but a language was not set. "
+                "[bold yellow]WARNING:[/] [bold green]--download_model[/] was used, but a language was not set. "
                 "the default value [cyan]'en-us'[/] will be used. If you want a different language, use the "
                 "[bold blue]--language[/] option to specify one."
             )
@@ -285,7 +286,7 @@ def parse_args():
         # Verify valid model size
         if (model_type := config['default_model']) not in ('small', 'large'):
             con.print(
-                f"[bold red]ERROR[/]: Invalid model size in config file: '{model_type}'. "
+                f"[bold red]ERROR:[/] Invalid model size in config file: '{model_type}'. "
                 "Defaulting to 'small'."
             )
             model_type = 'small'
@@ -301,7 +302,7 @@ def parse_args():
     elif config['cue_path']:
         if not Path(config['cue_path']).exists():
             con.print(
-                "[bold yellow]WARNING[/]: Cue file in [blue]defaults.toml[/] does not exist and will be skipped"
+                "[bold yellow]WARNING:[/] Cue file in [blue]defaults.toml[/] does not exist and will be skipped"
             )
             cue_file = None
         else:
@@ -340,17 +341,17 @@ def parse_args():
             ffmpeg = Path(config['ffmpeg_path'])
         elif (ffmpeg := which('ffmpeg')) is not None:
             con.print(
-                "[bold yellow]NOTE[/]: ffmpeg path in [blue]defaults.toml[/] does not exist, but "
+                "[yellow]NOTE:[/] ffmpeg path in [blue]defaults.toml[/] does not exist, but "
                 f"was found in system PATH: [green]{ffmpeg}[/]"
             )
             ffmpeg = 'ffmpeg'
         else:
-            con.print("[bold red]CRITICAL[/]: ffmpeg path in [blue]defaults.toml[/] does not exist")
+            con.print("[bold red]CRITICAL:[/] ffmpeg path in [blue]defaults.toml[/] does not exist")
             sys.exit(1)
     elif (ffmpeg := which('ffmpeg')) is not None:
         ffmpeg = 'ffmpeg'
     else:
-        con.print("[bold red]CRITICAL[/]: ffmpeg was not found in config file or system PATH. Aborting")
+        con.print("[bold red]CRITICAL:[/] ffmpeg was not found in config file or system PATH. Aborting")
         sys.exit(1)
 
     return args.audiobook, meta_fields, language, model_name, model_type, cue_file
@@ -507,7 +508,7 @@ def download_model(name: str) -> None:
         from requests.exceptions import ConnectionError as ReqConnectionError
     except ImportError:
         con.print(
-            "[bold red]CRITICAL[/]: requests library is not available, and is required for "
+            "[bold red]CRITICAL:[/] requests library is not available, and is required for "
             "downloading models. Run [bold green]pip install requests[/] and re-run the script."
         )
         sys.exit(18)
@@ -553,13 +554,13 @@ def download_model(name: str) -> None:
                 child_dir.rename(Path(out_dir))
         elif out_zip.exists() and not out_dir.exists():
             con.print(
-                "[bold red]ERROR[/]: Model archive downloaded successfully, but failed to extract. "
+                "[bold red]ERROR:[/] Model archive downloaded successfully, but failed to extract. "
                 "Manually extract the archive into the model directory and re-run the script."
             )
             sys.exit(4)
         else:
             con.print(
-                "[bold red]CRITICAL[/]: Model archive failed to download. The selected model "
+                "[bold red]CRITICAL:[/] Model archive failed to download. The selected model "
                 f"might not be supported by the script, or is unavailable. Follow {vosk_link} "
                 "to download a model manually.\n"
             )
@@ -607,7 +608,6 @@ def convert_time(time: str) -> str:
         else:
             parts[-1] = str(int(last) - 1)
     except Exception as e:
-        parts, milliseconds = None, None
         con.print(f"[bold red]CRITICAL:[/] Could not covert end chapter marker for {time}: [red]{e}[/red]")
         sys.exit(6)
 
@@ -772,41 +772,56 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
     return Path(out_file)
 
 
-def parse_timecodes(srt_content: list) -> list[dict]:
-    """Parse the contents of the timecode file.
+def parse_timecodes(srt_content: list, language: str = 'en-us') -> list[dict]:
+    """Parse the contents of the srt timecode file.
 
     Parses the output from `generate_timecodes` and generates start/end times, as well as chapter
     type (prologue, epilogue, etc.) if available.
 
     :param srt_content: List of timecodes extracted from the output of vosk
+    :param language: Selected language. Used for importing excluded phrases
     :return: A list of dictionaries containing start, end, and chapter type data
     """
 
+    # Get lang specific markers and excluded phrases
+    excluded_phrases, markers = get_language_features(language)
+    # If language features are None, they haven't been defined
+    if not excluded_phrases or not markers:
+        from model.models import get_lang_from_code
+        lang_str = get_lang_from_code(language)
+        con.print(
+            f"[bold red]CRITICAL:[/] Language features for [bright_blue]{lang_str.title()}[/] are not "
+            "yet configured. If you speak this language, consider contributing to this project."
+        )
+        sys.exit(13)
+
     timecodes = []
     counter = 1
-    markers = ('chapter', 'prologue', 'epilogue')
 
     for i, line in enumerate(srt_content):
         if (
                 # Not the end of the list
                 i != (len(srt_content) - 1) and
                 # Doesn't contain an excluded phrase
-                not any(x in srt_content[i+1] for x in excluded_phrases_english) and
+                not any(x in srt_content[i+1] for x in excluded_phrases) and
                 # Contains a marker substring
                 any(m in srt_content[i+1] for m in markers)
         ):
             if start_regexp := re.search(r'\d\d:\d\d:\d\d,\d+(?=\s-)', line, flags=0):
                 start = start_regexp.group(0).replace(',', '.')
 
-                if 'prologue' in srt_content[i+1]:
-                    chapter_type = 'Prologue'
-                elif 'epilogue' in srt_content[i+1]:
-                    chapter_type = 'Epilogue'
-                elif 'chapter' in srt_content[i+1]:
+                # Prologue
+                if markers[0] in srt_content[i+1]:
+                    chapter_type = markers[0].title()
+                # Chapter X
+                elif markers[1] in srt_content[i+1]:
                     # Add leading zero for better sorting if < 10
                     chapter_count = f'0{counter}' if counter < 10 else f'{counter}'
-                    chapter_type = f'Chapter {chapter_count}'
+                    chapter_type = f'{markers[1].title()} {chapter_count}'
                     counter += 1
+                # Epilogue
+                elif markers[2] in srt_content[i+1]:
+                    chapter_type = markers[2].title()
                 else:
                     chapter_type = ''
 
@@ -872,7 +887,6 @@ def write_cue_file(timecodes: list[dict], cue_path: PathLike) -> bool:
         with open(cue_path, 'x') as fp:
             fp.write(f'FILE "{cue_path.stem}.mp3" MP3\n')
             for i, time in enumerate(timecodes, start=1):
-
                 fp.writelines([
                     f"TRACK {i} AUDIO\n",
                     f'  TITLE\t"{time["chapter_type"]}"\n',
@@ -881,7 +895,7 @@ def write_cue_file(timecodes: list[dict], cue_path: PathLike) -> bool:
                 if i != len(timecodes):
                     fp.write(f"  END\t\t{time['end']}\n")
     except OSError as e:
-        con.print(f"[bold red]ERROR[/]: Failed to write cue file: [red]{e}[/]")
+        con.print(f"[bold red]ERROR:[/] Failed to write cue file: [red]{e}[/]")
         # Delete cue file to prevent parsing error if partially written
         if cue_path.exists():
             cue_path.unlink()
@@ -947,6 +961,11 @@ def main():
     con.print("[magenta]Preparing chapterfying magic[/magenta] :zap:...")
     print("\n")
 
+    # Check python version
+    if not sys.version_info >= (3, 10, 0):
+        con.print("[bold red]CRITICAL:[/] Python version must be 3.10.0 or greater to run this script\n")
+        sys.exit(20)
+
     # Destructure tuple
     audiobook_file, in_metadata, lang, model_name, model_type, cue_file = parse_args()
     if not str(audiobook_file).endswith('.mp3'):
@@ -977,7 +996,7 @@ def main():
     con.rule("[cyan]Discovering Cover Art[/cyan]")
     print("\n")
     if not parsed_metadata['cover_art']:
-        # con.print("[magenta]Perusing for cover art[/magenta]...")
+        con.print("[magenta]Perusing for cover art in source[/magenta]...")
         cover_art = extract_coverart(audiobook_file)
     else:
         if parsed_metadata['cover_art'].exists():
@@ -1024,7 +1043,7 @@ def main():
         con.rule("[cyan]Parsing Timecodes[/cyan]")
         print("\n")
 
-        timecodes = parse_timecodes(file_lines)
+        timecodes = parse_timecodes(file_lines, lang)
         con.print("[bold green]SUCCESS![/] Timecodes parsed")
 
     # Print timecodes table
@@ -1040,10 +1059,10 @@ def main():
             con.print("[bold green]SUCCESS![/] Cue file created")
     elif cue_file and cue_file.exists():
         con.print(
-            "[yellow]NOTE[/]: An existing cue file was found. Move, delete, or rename it to generate a new one"
+            "[yellow]NOTE:[/] An existing cue file was found. Move, delete, or rename it to generate a new one"
         )
     else:
-        con.print("[yellow]NOTE[/]: Nothing to write")
+        con.print("[yellow]NOTE:[/] Nothing to write")
     print("\n")
 
     # Split the file

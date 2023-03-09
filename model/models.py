@@ -73,11 +73,60 @@ model_languages = {
     'Polish': 'pl'
 }
 
+
+'''
+    Language Features
+    
+    Excluded phrases and chapter markers
+'''
+
+# Signal phrases for chapter markers
+_markers_english = ('prologue', 'chapter', 'epilogue')
+_markers_german = ('prolog', 'kapitel', 'epilog')
+
 # Some false positive phrases/words that trigger a chapter marker...will need building over time
-excluded_phrases_english = (
+_excluded_phrases_english = (
     'chapter and verse', 'chapters', 'this chapter', 'that chapter',
     'chapter of', 'in chapter', 'and chapter', 'chapter heading',
     'chapter head', 'chapter house', 'chapter book', 'a chapter',
     'chapter out', 'chapter in', 'particular chapter', 'spicy chapter',
-    'before chapter'
+    'before chapter', 'main chapter', 'final chapter', 'concluding chapter',
+    'glorious chapter', 'prologue to', 'from prologue', 'epilogue to',
+    'from epilogue'
 )
+
+_excluded_phrases_german = (
+    'der kapitelsaal', 'das schlusskapitel', 'das hauptkapitel', 'dieses kapitel',
+    'das schlusskapitel', 'die kapitelüberschrift', 'ein kapitel'
+)
+
+
+
+def get_lang_from_code(lang: str) -> str:
+    """Convert language code to friendly language string.
+
+    :param lang: Language code to convert
+    :return: Friendly language name
+    """
+
+    lang_str = list(filter(lambda l: model_languages[l] == lang, model_languages))[0].lower()
+    return lang_str
+
+
+def get_language_features(lang: str) -> tuple[tuple, tuple] | tuple[None, None]:
+    """Return excluded phrases and chapter markers for the specified language.
+
+    Module helper function to dynamically return language features based on the language passed by the user.
+    If no excluded phrases or markers are defined for the specified language, None is returned.
+
+    :param lang: Language code
+    :return: Tuple containing excluded phrases and markers for lang or None
+    """
+
+    module_vars = globals()
+
+    try:
+        lang_str = get_lang_from_code(lang)
+        return module_vars[f'_excluded_phrases_{lang_str}'], module_vars[f'_markers_{lang_str}']
+    except (KeyError, IndexError):
+        return None, None
