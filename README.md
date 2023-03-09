@@ -224,10 +224,10 @@ optional arguments:
                         
   --language, -l [LANGUAGE]
   DESCRIPTION:            model language to use. requires a supported model.
-                          'en-us' is provided with the project.
+                          en-us is provided with the project.
   
   --model, -m [{small,large}]
-  DESCRIPTION:            model type to use where multiple models are available. default is 'small'.
+  DESCRIPTION:            model type to use where multiple models are available. default is small.
   
   --download_model, -dm [{small,large}]
   DESCRIPTION:            download a model archive. language to download specified via
@@ -244,17 +244,17 @@ optional arguments:
                           optional metadata field.
                         
   --title, -t [TITLE]
-  DESCRIPTION:            audiobook title. Optional metadata field.
+  DESCRIPTION:            audiobook title. optional metadata field.
                         
   --genre, -g [GENRE]
-  DESCRIPTION:            audiobook genre. Optional metadata field. multiple genres can be separated 
+  DESCRIPTION:            audiobook genre. optional metadata field. multiple genres can be separated 
                           by a semicolon
                           
   --year, -y [YEAR]
-  DESCRIPTION:            audiobook release year. Optional metadata field.
+  DESCRIPTION:            audiobook release year. optional metadata field.
                         
   --comment, -c [COMMENT]
-  DESCRIPTION:            audiobook comment. Optional metadata field.
+  DESCRIPTION:            audiobook comment. optional metadata field.
 
   --cue_path, -cp [CUE_PATH]
   DESCRIPTION:            path to cue file in non-default location (i.e., not in the audiobook directory) 
