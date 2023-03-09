@@ -16,6 +16,7 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
   - [Table of Contents](#table-of-contents)
   - [About](#about)
     - [Machine Learning](#machine-learning)
+    - [Models](#models)
     - [Metadata Parsing](#metadata-parsing)
     - [Cue files](#cue-files)
     - [Configuration File](#configuration-file)
@@ -25,7 +26,7 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
   - [Usage](#usage)
     - [Examples](#examples)
   - [Improvement](#improvement)
-    - [Other Languages](#other-languages)
+    - [Language Support](#language-support)
   - [Known Issues](#known-issues)
     - [Access Denied Error on Windows](#access-denied-error-on-windows)
 
@@ -40,6 +41,16 @@ You can use this as an intermediary step for creating .m4b files, or keep the fi
 ### Machine Learning
 
 The script utilizes the `vosk-api` machine learning library which performs a speech-to-text conversion on the audiobook file, generating timestamps throughout which are stored in a srt (subrip) file. The file is then parsed, searching for phrases like "prologue", "chapter", and "epilogue", which are used as separators for the generated chapter files.
+
+### Models
+
+> **NOTE**: Downloading models requires the `requests` library
+
+The small United States English (`en-us`) machine learning model is already provided with this project. However, various other languages and model sizes are available to download directly from the script - it will unpack the archive for you, too, and no additional effort should be required. See [Supported Languages and Models](#supported-languages-and-models) for a comprehensive list.
+
+Models should be saved within the project's `model` directory as this is where the script looks for them. If you want to save multiple models or sizes, no problem - just don't change the name of the unpacked model archive as the script uses portions of it to determine which model to use based on the combination of arguments passed.
+
+If there is a model conflict, the script will perform a best effort guess to determine which one to use. If that fails, an error will be thrown.
 
 ### Metadata Parsing
 
@@ -71,9 +82,9 @@ default_model='small'
 ffmpeg_path='ffmpeg'
 # Change this to True if you always want the script to generate a cue file
 generate_cue_file='False'
-# Set this to the cue file path you want to use. Useful for continuous edits and script runs where the cue file
-# is saved somewhere other than the current audiobook directory (the default search path). The cue_path script
-# argument takes precedence over this path if used
+# Set this to the cue file path you want to use. Useful for continuous edits and script runs where the
+# cue file is saved somewhere other than the current audiobook directory (the default search path).
+# The cue_path script argument takes precedence over this path if used
 cue_path=''
 ```
 
@@ -110,6 +121,7 @@ Here is a quick example for Windows using PowerShell (it can be done via GUI, to
 $ffmpeg = 'C:\Users\SomeUser\Software\ffmpeg.exe'
 $newPath = $env:PATH + ";$ffmpeg"
 [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+# Now close and reopen PowerShell to update
 ```
 
 Here is a quick example using bash:
@@ -119,6 +131,8 @@ Here is a quick example using bash:
 ffmpeg="/home/someuser/software/ffmpeg"
 # If you're using zsh, replace with .zshrc
 echo "export PATH=${ffmpeg}:${PATH}" >> ~/.bashrc
+# Source the file to update
+source ~/.bashrc
 ```
 
 If you don't want to deal with all that, you can add the path of ffmpeg to the `defaults.toml` file included with the repository - copy and paste the full path and set it equal to the `ffmpeg_path` option **using single quotes** `''`:
@@ -177,8 +191,6 @@ The model used for speech-to-text the conversion is fairly dependent on the qual
 
 ## Usage
 
-> **NOTE**: Each argument has a shortened alias. All examples use the full argument name for clarity, but it's often more convenient to use the aliases!
-
 ```ruby
 usage: chapterize_ab.py [-h] or [--help]
 
@@ -198,9 +210,11 @@ positional arguments:
 optional argument flags:
 
   -h, --help              show help message with usage examples and exit.
+
   -ll, --list_languages   list supported languages and exit.
-  -wc, --write_cue_file   Generate a cue file in the audiobook directory for editing chapter markers. Default disabled,
-                          but can be enabled permanently through defaults.toml.
+
+  -wc, --write_cue_file   generate a cue file inside the audiobook directory for editing chapter markers.
+                          default disabled, but can be enabled permanently through defaults.toml.
                           
   
 optional arguments:
@@ -209,13 +223,15 @@ optional arguments:
   DESCRIPTION:            optional path to an existing srt timecode file in a different directory.
                         
   --language, -l [LANGUAGE]
-  DESCRIPTION:            model language to use. requires a supported model ('en-us' is provided).
+  DESCRIPTION:            model language to use. requires a supported model.
+                          'en-us' is provided with the project.
   
   --model, -m [{small,large}]
-  DESCRIPTION:            model type to use if multiple models are available. default is small.
+  DESCRIPTION:            model type to use where multiple models are available. default is 'small'.
   
   --download_model, -dm [{small,large}]
-  DESCRIPTION:            download the model archive specified in the --language parameter     
+  DESCRIPTION:            download a model archive. language to download specified via
+                          the --language argument.     
                         
   --cover_art, -ca [COVER_ART_PATH]
   DESCRIPTION:            path to cover art file. Optional.
@@ -224,14 +240,16 @@ optional arguments:
   DESCRIPTION:            audiobook author. Optional metadata field.
 
    --narrator, -n [NARRATOR]
-  DESCRIPTION:            audiobook narrator (should be compatible with most players). Optional metadata field.
+  DESCRIPTION:            audiobook narrator (should be compatible with most players). 
+                          optional metadata field.
                         
   --title, -t [TITLE]
   DESCRIPTION:            audiobook title. Optional metadata field.
                         
   --genre, -g [GENRE]
-  DESCRIPTION:            audiobook genre. Optional metadata field.
-                        
+  DESCRIPTION:            audiobook genre. Optional metadata field. multiple genres can be separated 
+                          by a semicolon
+                          
   --year, -y [YEAR]
   DESCRIPTION:            audiobook release year. Optional metadata field.
                         
@@ -239,17 +257,19 @@ optional arguments:
   DESCRIPTION:            audiobook comment. Optional metadata field.
 
   --cue_path, -cp [CUE_PATH]
-  DESCRIPTION:            Path to cue file in non-default location (i.e., not in the audiobook directory) containing 
-                          chapter timecodes. Can also be set in defaults.toml, which has lesser precedence than this
-                          argument.
+  DESCRIPTION:            path to cue file in non-default location (i.e., not in the audiobook directory) 
+                          containing chapter timecodes. can also be set within defaults.toml, which has 
+                          lesser precedence than this argument.
                         
 ```
 
 ### Examples
 
+> **NOTE**: Each argument has a shortened alias. Most examples use the full argument name for clarity, but it's often more convenient in practice to use the aliases
+
 ```bash
 # Adding the title and genre metadata fields 
-~$ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --title 'Game of Thrones' --genre 'Fantasy'
+~$ python3 ./chapterize_ab.py '/path/to/audiobook/file.mp3' --title 'Game of Thrones' --genre 'Fantasy'
 ```
 
 ```powershell
@@ -264,7 +284,7 @@ PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --language 'de'
 
 ```bash
 # Download a different model (Italian large used here as an example)
-~$ python ./chapterize_ab.py '/path/to/audiobook/file.mp3' --download_model 'large' --language 'italian'
+~$ python3 ./chapterize_ab.py '/path/to/audiobook/file.mp3' --download_model 'large' --language 'italian'
 ```
 
 ```powershell
@@ -281,16 +301,15 @@ PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --write_cue_file
 
 ## Improvement
 
-This script is still in alpha, and thus there are bound to be some issues; I've noticed a few words
-and phrases that have falsely generated chapter markers, which I'm currently compiling into an *ignore* list as I see
-them. With that said, it's been remarkably accurate so far.
+This script is still in alpha, and thus there are bound to be some issues; I've noticed a few words and phrases that have falsely generated chapter markers, which I'm currently compiling into an *ignore* list as I see them. With that said, it's been remarkably accurate so far.
 
-I encourage anyone who might use this to report any issues you find, particularly with false positive chapter markers.
-The more false positives identified, the more accurate it will be!
+I encourage anyone who might use this to report any issues you find, particularly with false positive chapter markers. The more false positives identified, the more accurate it will be!
 
-### Other Languages
+### Language Support
 
-So far, the excluded phrases list for false positive chapter markers is targeted toward English audiobooks only. However, if you want to contribute an exclusion list for other languages (preferably vosk supported languages), please do! Open a pull request (or send them to me in a GitHub issue) and I'll gladly merge them into the project.
+So far, support for this project is primarily targeted toward English audiobooks only; I've added some German content, but I'm by no means a fluent speaker and there are a lot of gaps.
+
+If you want to contribute an exclusion list and chapter markers for other languages (preferably vosk supported languages), please do! Open a pull request or send them to me in a GitHub issue and I'll gladly merge them into the project. I'd like to make this project multi-lingual, but I can't do it without your help.
 
 ---
 
