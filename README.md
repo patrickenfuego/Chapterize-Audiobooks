@@ -294,7 +294,7 @@ PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --write_cue_file
 
 ```bash
 # Specify custom path to a cue file. Overrides the default search path (audiobook directory)
-~$ python3 ./chapterize_ab.py '/path/to/audiobook/file.mp3' --cue_file '/path/to/file.cue'
+~$ python3 ./chapterize_ab.py '/path/to/audiobook/file.mp3' --cue_path '/path/to/file.cue'
 ```
 
 ---
