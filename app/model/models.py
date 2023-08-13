@@ -73,7 +73,6 @@ model_languages = {
     'Polish': 'pl'
 }
 
-
 '''
     Language Features
     
@@ -82,7 +81,9 @@ model_languages = {
 
 # Signal phrases for chapter markers
 _markers_english = ('prologue', 'chapter', 'epilogue')
+_markers_english_experimental = ('preface', 'foreword')
 _markers_german = ('prolog', 'kapitel', 'epilog')
+_markers_german_experimental = ()
 
 # Some false positive phrases/words that trigger a chapter marker...will need building over time
 _excluded_phrases_english = (
@@ -101,7 +102,6 @@ _excluded_phrases_german = (
 )
 
 
-
 def get_lang_from_code(lang: str) -> str:
     """Convert language code to friendly language string.
 
@@ -113,7 +113,7 @@ def get_lang_from_code(lang: str) -> str:
     return lang_str
 
 
-def get_language_features(lang: str) -> tuple[tuple, tuple] | tuple[None, None]:
+def get_language_features(lang: str) -> tuple[tuple, tuple, tuple] | tuple[None, None, None]:
     """Return excluded phrases and chapter markers for the specified language.
 
     Module helper function to dynamically return language features based on the language passed by the user.
@@ -127,6 +127,9 @@ def get_language_features(lang: str) -> tuple[tuple, tuple] | tuple[None, None]:
 
     try:
         lang_str = get_lang_from_code(lang)
-        return module_vars[f'_excluded_phrases_{lang_str}'], module_vars[f'_markers_{lang_str}']
+        return (module_vars[f'_excluded_phrases_{lang_str}'],
+                module_vars[f'_markers_{lang_str}'],
+                module_vars[f'_markers_{lang_str}_experimental'])
     except (KeyError, IndexError):
-        return None, None
+        return None, None, None
+

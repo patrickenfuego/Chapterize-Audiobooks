@@ -28,7 +28,7 @@ from rich.progress import (
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
 # Local imports
-from model.models import (
+from app.model.models import (
     models_small,
     models_large,
     model_languages,
@@ -43,7 +43,7 @@ __version__ = '0.6.0'
 __author__ = 'patrickenfuego'
 
 PathLike = TypeVar('PathLike', Path, str, None)
-vosk_url = "https://alphacephei.com/vosk/models"
+vosk_url = 'https://alphacephei.com/vosk/models'
 vosk_link = f"[link={vosk_url}]this link[/link]"
 # Default to ffmpeg in PATH
 ffmpeg = 'ffmpeg'
@@ -63,7 +63,7 @@ def path_exists(path: PathLike) -> Path:
     if Path(path).exists():
         return Path(path)
     else:
-        raise FileNotFoundError(f"The path: <{path}> does not exist")
+        raise FileNotFoundError(f"The path: '{path}' does not exist")
 
 
 def verify_language(language: str) -> str:
@@ -163,7 +163,7 @@ def parse_config() -> dict:
     :return: A dictionary containing the config file contents.
     """
 
-    if (config := Path.cwd().joinpath('defaults.toml')).exists():
+    if (config := Path(__file__).parent.joinpath('defaults.toml')).exists():
         with open(config, 'r') as fp:
             lines = fp.readlines()
         defaults = {k: v for k, v in [l.strip("\n").replace("'", "").split('=') for l in lines if '#' not in l]}
@@ -232,6 +232,8 @@ def parse_args():
                         help='Generate a cue file in the audiobook directory for editing chapter markers. Can also be set in defaults.toml. Default disabled')
     parser.add_argument('--cue_path', '-cp', nargs='?', default=None, metavar='CUE_PATH', type=path_exists,
                         help='Path to cue file in non-default location (i.e., not in the audiobook directory) containing chapter timecodes. Can also be set in defaults.toml, which has lesser precedence than this argument')
+    parser.add_argument('--convert_m4b', '-m4b', action='store_true', dest='m4b',
+                        help='Convert the audiobook to m4b format after splitting. Can also be set in defaults.toml. Default disabled')
 
     args = parser.parse_args()
     config = parse_config()
@@ -273,7 +275,9 @@ def parse_args():
     if args.description:
         meta_fields['description'] = args.description
     if args.narrator:
-        meta_fields['narrator'] = args.narrator
+        meta_fields['composer'] = args.narrator
+    if args.title:
+        meta_fields['title'] = args.title
 
     # If the user chooses to download a model, and it was verified
     if download:
@@ -311,9 +315,9 @@ def parse_args():
                 f"[bright_magenta]Cue file <<[/] [blue]default.toml[/]: Reading cue file from [green]{cue_file}[/]"
             )
     elif (
-            args.write_cue or
-            config['generate_cue_file'] == 'True' or
-            args.audiobook.with_suffix('.cue').exists()
+            args.write_cue
+            or config['generate_cue_file'] == 'True'
+            or args.audiobook.with_suffix('.cue').exists()
         ):
 
         cue_file = args.audiobook.with_suffix('.cue')
@@ -324,6 +328,23 @@ def parse_args():
 
     if cue_file:
         print("\n")
+
+    if 'experimental_separators' in config and config['experimental_separators'] == 'True':
+        con.print(
+            "[bold yellow]WARNING:[/] Experimental separators are enabled. This may cause unexpected "
+            "behavior or incorrect segmentation."
+        )
+        experimental = True
+    else:
+        experimental = False
+
+    # Whether to convert to m4b. CLI arg takes precedence over config file
+    if args.m4b:
+        m4b = True
+    elif 'convert_to_m4b' in config and config['convert_to_m4b'] == 'True':
+        m4b = True
+    else:
+        m4b = False
 
     # If the user passes a language via CLI
     if 'lang' in args:
@@ -354,7 +375,24 @@ def parse_args():
         con.print("[bold red]CRITICAL:[/] ffmpeg was not found in config file or system PATH. Aborting")
         sys.exit(1)
 
-    return args.audiobook, meta_fields, language, model_name, model_type, cue_file
+    return args.audiobook, meta_fields, language, model_name, model_type, cue_file, experimental, m4b
+
+
+def get_duration(audiobook_path: PathLike):
+    """Get the duration of an audio file using ffprobe.
+
+    :param audiobook_path: Audiobook file to process
+    :return: None if no output is produced, otherwise the duration in sexagesimal format HH:MM:SS.MS
+    """
+
+    args = ['ffprobe', '-i', audiobook_path, '-show_entries', 'format=duration', '-sexagesimal',
+            '-v', 'quiet', '-of', 'csv=p=0']
+    cmd = subprocess.run(args, capture_output=True, universal_newlines=True)
+
+    if cmd.stdout:
+        return cmd.stdout.strip('\n')
+    else:
+        return None
 
 
 def build_progress(bar_type: str) -> Progress:
@@ -430,6 +468,29 @@ def extract_metadata(audiobook_path: PathLike) -> dict:
     :return: A dictionary containing metadata values
     """
 
+    def read_file(encoding: str = 'utf8', count: int = 1):
+        try:
+            with open(metadata_file, 'r', encoding=encoding) as fp:
+                lines = fp.readlines()
+        except UnicodeDecodeError:
+            if count < 3:
+                con.print(
+                    "[bold yellow]WARNING:[/] Failed to read the audiobook's metadata content. "
+                    "Attempting a different encoding format..."
+                )
+                enc = 'utf-16'
+                count += 1
+                # Call function recursively with new encoding
+                read_file(enc, count)
+            else:
+                con.print(
+                    "[bold red]ERROR:[/] Failed to read the audiobook's metadata content. "
+                    "Add or copy the content manually"
+                )
+                lines = None
+
+        return lines
+
     metadata_file = audiobook_path.parent.joinpath('metadata.txt')
     # Extract metadata to file using ffmpeg
     subprocess.run([str(ffmpeg), '-y', '-loglevel', 'quiet', '-i', audiobook_path,
@@ -439,17 +500,21 @@ def extract_metadata(audiobook_path: PathLike) -> dict:
     # If path exists and has some content
     if path_exists(metadata_file) and Path(metadata_file).stat().st_size > 10:
         con.print("[bold green]SUCCESS![/] Metadata extraction complete")
-        with open(metadata_file, 'r') as fp:
-            meta_lines = fp.readlines()
-
-        for line in meta_lines:
-            line_split = line.split('=')
-            if len(line_split) == 2:
-                key, value = [x.strip('\n') for x in line_split]
-                if key in ['title', 'genre', 'album_artist', 'artist', 'album', 'year']:
-                    meta_dict[key] = value
+        meta_lines = read_file(count=1)
+        if not meta_lines:
+            con.print("[bold yellow]WARNING:[/] Failed to parse metadata file")
+        else:
+            for line in meta_lines:
+                line_split = line.split('=')
+                if len(line_split) == 2:
+                    key, value = [x.strip('\n') for x in line_split]
+                    if key in ['title', 'genre', 'album_artist', 'artist', 'album', 'year']:
+                        meta_dict[key] = value
     else:
-        con.print("[bold yellow]WARNING:[/] Failed to parse metadata file, or none was found")
+        con.print(
+            "[bold yellow]WARNING:[/] Extracted metadata file does not exist. This could be the result "
+            "of an error, or no metadata was found in the source"
+        )
     # Delete the metadata file once done
     metadata_file.unlink()
 
@@ -638,7 +703,7 @@ def split_file(audiobook_path: PathLike,
                 'NEW LOG START\n'
                 '********************************************************\n\n'
             ])
-    command = [ffmpeg, '-y', '-hide_banner', '-loglevel', 'info', '-i', f'{str(audiobook_path)}']
+    command = [ffmpeg, '-y', '-hide_banner', '-loglevel', 'info', '-i', audiobook_path]
     if cover_art:
         command.extend(['-i', cover_art, '-id3v2_version', '3', '-metadata:s:v',
                         'comment="Cover (front)"'])
@@ -649,7 +714,11 @@ def split_file(audiobook_path: PathLike,
 
     # Handle metadata strings if they exist
     if 'album_artist' in metadata:
-        command.extend(['-metadata', f"album_artist={metadata['album_artist']}",
+        if 'composer' in metadata:
+            aartist = f"{metadata['album_artist']}, {metadata['composer']}"
+        else:
+            aartist = {metadata['album_artist']}
+        command.extend(['-metadata', aartist,
                         '-metadata', f"artist={metadata['album_artist']}"])
     if 'genre' in metadata:
         command.extend(['-metadata', f"genre={metadata['genre']}"])
@@ -661,8 +730,8 @@ def split_file(audiobook_path: PathLike,
         command.extend(['-metadata', f"comment={metadata['comment']}"])
     if 'description' in metadata:
         command.extend(['-metadata', f"description={metadata['description']}"])
-    if 'narrator' in metadata:
-        command.extend(['-metadata', f"composer={metadata['narrator']}"])
+    if 'composer' in metadata:
+        command.extend(['-metadata', f"composer={metadata['composer']}"])
 
     progress = build_progress(bar_type='chapterize')
     with progress:
@@ -715,7 +784,7 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
     """
 
     sample_rate = 16000
-    model_root = Path(r"model")
+    model_root = Path(__file__).parent / 'model'
 
     # If the timecode file already exists, exit early and return path
     out_file = audiobook_path.with_suffix('.srt')
@@ -772,22 +841,29 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
     return Path(out_file)
 
 
-def parse_timecodes(srt_content: list, language: str = 'en-us') -> list[dict]:
+def parse_timecodes(audiobook_path: PathLike,
+                    srt_content: list,
+                    language: str = 'en-us',
+                    use_experimental: bool = False,
+                    convert_m4b: bool = False) -> list[dict]:
     """Parse the contents of the srt timecode file.
 
     Parses the output from `generate_timecodes` and generates start/end times, as well as chapter
     type (prologue, epilogue, etc.) if available.
 
+    :param audiobook_path: Path to audiobook file. Used to determine duration
     :param srt_content: List of timecodes extracted from the output of vosk
     :param language: Selected language. Used for importing excluded phrases
+    :param use_experimental: Whether to use experimental separators for splitting chapters
+    :param convert_m4b: Whether to convert the audiobook to m4b format
     :return: A list of dictionaries containing start, end, and chapter type data
     """
 
     # Get lang specific markers and excluded phrases
-    excluded_phrases, markers = get_language_features(language)
+    excluded_phrases, markers, experimental = get_language_features(language)
     # If language features are None, they haven't been defined
     if not excluded_phrases or not markers:
-        from model.models import get_lang_from_code
+        from app.model.models import get_lang_from_code
         lang_str = get_lang_from_code(language)
         con.print(
             f"[bold red]CRITICAL:[/] Language features for [bright_blue]{lang_str.title()}[/] are not "
@@ -799,14 +875,21 @@ def parse_timecodes(srt_content: list, language: str = 'en-us') -> list[dict]:
     counter = 1
 
     for i, line in enumerate(srt_content):
-        if (
-                # Not the end of the list
-                i != (len(srt_content) - 1) and
-                # Doesn't contain an excluded phrase
-                not any(x in srt_content[i+1] for x in excluded_phrases) and
-                # Contains a marker substring
-                any(m in srt_content[i+1] for m in markers)
-        ):
+        condition = (
+            # Not the end of the list
+            i != (len(srt_content) - 1)
+            # Doesn't contain an excluded phrase
+            and not any(x in srt_content[i+1] for x in excluded_phrases)
+        )
+
+        if use_experimental:
+            # Contains a marker substring or experimental separator
+            condition = condition and (any(m in srt_content[i+1] for m in markers) or line in experimental)
+        else:
+            # Contains a marker substring
+            condition = condition and any(m in srt_content[i+1] for m in markers)
+
+        if condition:
             if start_regexp := re.search(r'\d\d:\d\d:\d\d,\d+(?=\s-)', line, flags=0):
                 start = start_regexp.group(0).replace(',', '.')
 
@@ -815,6 +898,10 @@ def parse_timecodes(srt_content: list, language: str = 'en-us') -> list[dict]:
                     chapter_type = markers[0].title()
                 # Chapter X
                 elif markers[1] in srt_content[i+1]:
+                    # Handle decimal chapter numbers
+                    decimal_match = re.compile(r'\d+\.\d+')
+                    if '.' in srt_content[i+1]:
+                        chapter_num = re.match(r'\d+\.?')
                     # Add leading zero for better sorting if < 10
                     chapter_count = f'0{counter}' if counter < 10 else f'{counter}'
                     chapter_type = f'{markers[1].title()} {chapter_count}'
@@ -822,6 +909,12 @@ def parse_timecodes(srt_content: list, language: str = 'en-us') -> list[dict]:
                 # Epilogue
                 elif markers[2] in srt_content[i+1]:
                     chapter_type = markers[2].title()
+                # Preface
+                elif use_experimental and experimental[0] in line:
+                    chapter_type = experimental[0].title()
+                # foreword
+                elif use_experimental and experimental[1] in line:
+                    chapter_type = experimental[1].title()
                 else:
                     chapter_type = ''
 
@@ -841,6 +934,15 @@ def parse_timecodes(srt_content: list, language: str = 'en-us') -> list[dict]:
     for i, d in enumerate(timecodes):
         if i != len(timecodes) - 1:
             d['end'] = convert_time(timecodes[i+1]['start'])
+        else:
+            if (duration := get_duration(audiobook_path)) is not None:
+                d['end'] = duration
+            elif convert_m4b:
+                con.print(
+                    '[bold red]ERROR:[/] Failed to get duration of the audiobook which is a requirement '
+                    'for m4b conversion. Exiting...'
+                )
+                sys.exit(11)
 
     if timecodes:
         return timecodes
@@ -917,18 +1019,17 @@ def read_cue_file(cue_path: PathLike) -> list[dict] | None:
     time_dict = {}
 
     with open(cue_path, 'r') as fp:
-        content = fp.readlines()
-    content = [l.strip('\n') for l in content]
+        content = [l.strip('\n') for l in fp.readlines()]
 
     for i, line in enumerate(content[1:]):
         try:
             if 'TITLE' in line:
-                time_dict['chapter_type'] = re.search(r'TITLE\t"(.*)"', line)[1]
+                time_dict['chapter_type'] = re.search(r'TITLE\s+"(.*)"', line)[1]
             if 'START' in line:
-                time_dict['start'] = re.search(r'START\t(.+)', line)[1]
-            if 'END' in line and i != len(content) - 1:
-                time_dict['end'] = re.search(r'END\t+(.+)', line)[1]
-        except (ValueError, IndexError) as e:
+                time_dict['start'] = re.search(r'START\s+(.+)', line)[1]
+            if 'END' in line:
+                time_dict['end'] = re.search(r'END\s+(.+)', line)[1]
+        except (ValueError, IndexError, TypeError) as e:
             con.print(f"[bold red]ERROR:[/] Failed to match line: [red]{e}[/]. Returning...")
             return None
 
@@ -967,7 +1068,17 @@ def main():
         sys.exit(20)
 
     # Destructure tuple
-    audiobook_file, in_metadata, lang, model_name, model_type, cue_file = parse_args()
+    (
+        audiobook_file,
+        in_metadata,
+        lang,
+        model_name,
+        model_type,
+        cue_file,
+        experimental,
+        m4b
+    ) = parse_args()
+
     if not str(audiobook_file).endswith('.mp3'):
         con.print("[bold red]ERROR:[/] The script only works with .mp3 files (for now)")
         sys.exit(9)
@@ -1032,6 +1143,12 @@ def main():
 
         if (timecodes := read_cue_file(cue_file)) is not None:
             con.print("[bold green]SUCCESS![/] Timecodes parsed from cue file")
+            if m4b and 'end' not in timecodes[-1]:
+                con.print(
+                    "[bold yellow]WARNING:[/] Cue file does not contain an end timecode for the final segment "
+                    "which is required for m4b conversion. Delete the cue file and regenerate it. Exiting..."
+                )
+                sys.exit(15)
     else:
         timecodes = None
 
@@ -1043,7 +1160,7 @@ def main():
         con.rule("[cyan]Parsing Timecodes[/cyan]")
         print("\n")
 
-        timecodes = parse_timecodes(file_lines, lang)
+        timecodes = parse_timecodes(audiobook_file, file_lines, lang, use_experimental=experimental, convert_m4b=m4b)
         con.print("[bold green]SUCCESS![/] Timecodes parsed")
 
     # Print timecodes table
@@ -1055,7 +1172,7 @@ def main():
     con.rule("[cyan]Writing Cue File[/cyan]")
     print("\n")
     if cue_file and not cue_file.exists():
-        if (success := write_cue_file(timecodes, cue_file)) is True:
+        if write_cue_file(timecodes, cue_file):
             con.print("[bold green]SUCCESS![/] Cue file created")
     elif cue_file and cue_file.exists():
         con.print(

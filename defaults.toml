@@ -9,6 +9,11 @@ default_model='small'
 ffmpeg_path='ffmpeg'
 # Change this to true if you always want the script to generate a cue file
 generate_cue_file='False'
+# Change this to True to use experimental separators like preface/foreword. May not work well with all books
+experimental_separators='False'
+# Change to True to Always convert output to m4b format. This can be set as an alternative to the CLI,
+# but the CLI argument takes precedence if used
+convert_to_m4b='False'
 # Set this to the cue file path you want to use. Useful for continuous edits and script runs where the cue file
 # is saved somewhere other than the current audiobook directory (the default search path). The cue_path script
 # argument takes precedence over this path if used
