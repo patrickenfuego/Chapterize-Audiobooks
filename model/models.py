@@ -91,8 +91,8 @@ _excluded_phrases_english = (
     'chapter head', 'chapter house', 'chapter book', 'a chapter',
     'chapter out', 'chapter in', 'particular chapter', 'spicy chapter',
     'before chapter', 'main chapter', 'final chapter', 'concluding chapter',
-    'glorious chapter', 'prologue to', 'from prologue', 'epilogue to',
-    'from epilogue'
+    'glorious chapter', 'next chapter', 'chapter asking', 'matthew chapter',
+    'prologue to', 'from prologue', 'epilogue to', 'from epilogue'
 )
 
 _excluded_phrases_german = (
