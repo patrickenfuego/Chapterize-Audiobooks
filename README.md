@@ -25,6 +25,7 @@ Split a single, monolithic mp3 audiobook file into chapters using Machine Learni
   - [Supported Languages and Models](#supported-languages-and-models)
   - [Usage](#usage)
     - [Examples](#examples)
+    - [Docker](#docker)
   - [Improvement](#improvement)
     - [Language Support](#language-support)
   - [Known Issues](#known-issues)
@@ -298,6 +299,22 @@ PS > python .\chapterize_ab.py 'C:\path\to\audiobook\file.mp3' --write_cue_file
 ```
 
 ---
+
+### Docker
+
+This makes the assumption that you are familiar with building and running [Docker](https://docs.docker.com/manuals/). There is a Dockerfile that you can build and run this solution with.
+
+Build with the following:
+
+```powershell
+docker build -t chapterizeaudiobooks .
+```
+
+With a volume setup, you can run this solution like so:
+
+```powershell
+docker run --rm -v "path/on/your/machine/to/audiobooks:/audiobooks" chapterizeaudiobooks "/audiobooks/file.mp3"
+```
 
 ## Improvement
 
