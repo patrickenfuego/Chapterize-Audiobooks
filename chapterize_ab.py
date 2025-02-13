@@ -694,16 +694,19 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
     batched_model = BatchedInferencePipeline(model=model)
 
     # set word_timestamps for ms precision of segements
-    segments, info = batched_model.transcribe(audiobook_path, word_timestamps=True, batch_size=16)
+    segments, _ = batched_model.transcribe(audiobook_path, word_timestamps=True, batch_size=16)
 
     with open(out_file, 'w+') as fp:
-        for count, segment in enumerate(segments):
-            start_timestamp = format_timestamp_from_float(segment.start)
-            end_timestamp =format_timestamp_from_float(segment.end)
-            fp.write(f"{str(count+1)}\n")
-            fp.write(f"{start_timestamp} --> {end_timestamp}\n")
-            fp.write(f"{segment.text.strip()}\n")
-            fp.write("\n")
+        count = 0
+        for segment in segments:
+            for word in segment.words:
+                count += 1
+                start_timestamp = format_timestamp_from_float(word.start)
+                end_timestamp =format_timestamp_from_float(word.end)
+                fp.write(f"{str(count+1)}\n")
+                fp.write(f"{start_timestamp} --> {end_timestamp}\n")
+                fp.write(f"{word.word.strip()}\n")
+                fp.write("\n")
     con.print("[bold green]SUCCESS![/] Timecode file created\n")
 
     return Path(out_file)
