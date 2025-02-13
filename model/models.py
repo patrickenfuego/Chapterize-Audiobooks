@@ -81,7 +81,7 @@ model_languages = {
 '''
 
 # Signal phrases for chapter markers
-_markers_english = ('prologue', 'chapter', 'epilogue')
+_markers_english = ('Prolog', 'Prologue', 'Chapter', 'Epilogue')
 _markers_german = ('prolog', 'kapitel', 'epilog')
 
 # Some false positive phrases/words that trigger a chapter marker...will need building over time

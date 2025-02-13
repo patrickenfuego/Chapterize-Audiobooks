@@ -4,6 +4,7 @@ import re
 import subprocess
 import argparse
 import sys
+from datetime import timedelta
 from typing import Optional, TypeVar
 from pathlib import Path
 from shutil import (
@@ -25,7 +26,7 @@ from rich.progress import (
     TextColumn,
     MofNCompleteColumn
 )
-from vosk import Model, KaldiRecognizer, SetLogLevel
+from faster_whisper import WhisperModel, BatchedInferencePipeline
 
 # Local imports
 from model.models import (
@@ -99,64 +100,6 @@ def verify_language(language: str) -> str:
         return code
 
 
-def verify_download(language: str, model_type: str) -> str:
-    """Verifies that the selected language can be downloaded by the script.
-
-    If the download option is selected, this function verifies that the language
-    model and size are supported by the script.
-
-    :param language: Language of the model to download.
-    :param model_type: Type of model (small or large).
-    :return: String name of the model file to download if supported.
-    """
-
-    lang_code = verify_language(language)
-    name = ''
-    found = False
-    other = 'small' if model_type == 'large' else 'large'
-
-    if model_type == 'small':
-        for line in models_small:
-            if lang_code in line:
-                name = line
-                break
-    elif model_type == 'large':
-        for line in models_large:
-            if lang_code in line:
-                name = line
-                break
-
-    # If the specified model wasn't found, check for a different size
-    if not name and model_type == 'small':
-        for line in models_large:
-            if lang_code in line:
-                found = True
-                break
-    elif not name and model_type == 'large':
-        for line in models_small:
-            if lang_code in line:
-                found = True
-                break
-
-    if not name and found:
-        con.print(
-            f"[bold yellow]WARNING:[/] The selected model cannot be downloaded for '{language}' "
-            f"in the specified size '{model_type}'. However, a '{other}' model was found. "
-            f"You can re-run the script and choose {other}, or attempt to "
-            f"download a different model manually from {vosk_link}."
-        )
-        sys.exit(3)
-    elif not name:
-        con.print(
-            f"[bold red]ERROR:[/] The selected model cannot be downloaded for '{language}' "
-            f"in size {model_type}. You can try and download a different model manually "
-            f"from {vosk_link}."
-        )
-        sys.exit(33)
-
-    return name
-
-
 def parse_config() -> dict:
     """Parses the toml config file.
 
@@ -208,9 +151,6 @@ def parse_args():
                         type=str, choices=['small', 'large'],
                         help='Model type to use if multiple models are available. Default is small.')
     parser.add_argument('--list_languages', '-ll', action='store_true', help='List supported languages and exit')
-    parser.add_argument('--download_model', '-dm', choices=['small', 'large'], dest='download',
-                        nargs='?', default=argparse.SUPPRESS,
-                        help='Download the model archive specified in the --language parameter')
     parser.add_argument('--cover_art', '-ca', dest='cover_art', nargs='?', default=None,
                         metavar='COVER_ART_PATH', type=path_exists, help='Path to cover art file. Optional')
     parser.add_argument('--author', '-a', dest='author', nargs='?', default=None,
@@ -246,17 +186,6 @@ def parse_args():
         )
         print("\n")
         sys.exit(0)
-
-    if 'download' in args:
-        if args.lang == 'en-us':
-            con.print(
-                "[bold yellow]WARNING:[/] [bold green]--download_model[/] was used, but a language was not set. "
-                "the default value [cyan]'en-us'[/] will be used. If you want a different language, use the "
-                "[bold blue]--language[/] option to specify one."
-            )
-
-        download = 'small' if args.download not in ['small', 'large'] else args.download
-        model_name = verify_download(args.lang, download)
 
 
     # Set ID3 metadata fields based on passed args
@@ -608,7 +537,7 @@ def convert_time(time: str) -> str:
         else:
             parts[-1] = str(int(last) - 1)
     except Exception as e:
-        con.print(f"[bold red]CRITICAL:[/] Could not covert end chapter marker for {time}: [red]{e}[/red]")
+        con.print(f"[bold red]CRITICAL:[/] Could not convert end chapter marker for {time}: [red]{e}[/red]")
         sys.exit(6)
 
     return f"{':'.join(parts)}.{milliseconds}"
@@ -700,6 +629,16 @@ def split_file(audiobook_path: PathLike,
             progress.update(task, advance=1)
 
 
+def format_timestamp_from_float(seconds: float):
+    # Create a timedelta object
+    td = timedelta(seconds=seconds)
+    hours, remainder = divmod(td.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    milliseconds = td.microseconds // 1000
+    formatted_timestamp = '{:02}:{:02}:{:02},{:03}'.format(hours, minutes, seconds, milliseconds)
+    return formatted_timestamp
+
+
 def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str) -> Path:
     """Generate chapter timecodes using vosk Machine Learning API.
 
@@ -750,24 +689,25 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
         )
         model_path = None
 
-    SetLogLevel(-1)
-    model = Model(lang=language, model_path=str(model_path))
-    rec = KaldiRecognizer(model, sample_rate)
-    rec.SetWords(True)
+    model_size = "tiny.en"
+    model = WhisperModel(model_size, compute_type="float32")
+    batched_model = BatchedInferencePipeline(model=model)
 
-    try:
-        # Convert the file to wav (if needed), and stream output to file
-        with subprocess.Popen([str(ffmpeg), "-loglevel", "quiet", "-i",
-                               audiobook_path,
-                               "-ar", str(sample_rate), "-ac", "1", "-f", "s16le", "-"],
-                              stdout=subprocess.PIPE).stdout as stream:
-            with open(out_file, 'w+') as fp:
-                fp.writelines(rec.SrtResult(stream))
+    # set word_timestamps for ms precision of segements
+    segments, _ = batched_model.transcribe(audiobook_path, word_timestamps=True, batch_size=16)
 
-        con.print("[bold green]SUCCESS![/] Timecode file created\n")
-    except Exception as e:
-        con.print(f"[bold red]ERROR:[/] Failed to generate timecode file with vosk: [red]{e}[/red]\n")
-        sys.exit(7)
+    with open(out_file, 'w+') as fp:
+        count = 0
+        for segment in segments:
+            for word in segment.words:
+                count += 1
+                start_timestamp = format_timestamp_from_float(word.start)
+                end_timestamp =format_timestamp_from_float(word.end)
+                fp.write(f"{str(count+1)}\n")
+                fp.write(f"{start_timestamp} --> {end_timestamp}\n")
+                fp.write(f"{word.word.strip()}\n")
+                fp.write("\n")
+    con.print("[bold green]SUCCESS![/] Timecode file created\n")
 
     return Path(out_file)
 
@@ -811,16 +751,16 @@ def parse_timecodes(srt_content: list, language: str = 'en-us') -> list[dict]:
                 start = start_regexp.group(0).replace(',', '.')
 
                 # Prologue
-                if markers[0] in srt_content[i+1]:
+                if markers[0] in srt_content[i+1] or markers[1] in srt_content[i+1]:
                     chapter_type = markers[0].title()
                 # Chapter X
-                elif markers[1] in srt_content[i+1]:
+                elif markers[2] in srt_content[i+1]:
                     # Add leading zero for better sorting if < 10
                     chapter_count = f'0{counter}' if counter < 10 else f'{counter}'
-                    chapter_type = f'{markers[1].title()} {chapter_count}'
+                    chapter_type = f'{markers[2].title()} {chapter_count}'
                     counter += 1
                 # Epilogue
-                elif markers[2] in srt_content[i+1]:
+                elif markers[3] in srt_content[i+1]:
                     chapter_type = markers[2].title()
                 else:
                     chapter_type = ''
@@ -1006,14 +946,6 @@ def main():
         else:
             con.print("[bold yellow]WARNING:[/] Cover art path does not exist")
             cover_art = None
-
-    # Download model if option selected
-    if model_name and lang:
-        con.rule(f"[cyan]Downloading '{lang} ({model_type})' Model[/cyan]")
-        print("\n")
-        con.print("[magenta]Preparing download...[/magenta]")
-        print("\n")
-        download_model(model_name)
 
     # Generate timecodes from mp3 file
     con.rule("[cyan]Generating Timecodes[/cyan]")
