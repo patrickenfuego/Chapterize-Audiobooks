@@ -4,6 +4,7 @@ import re
 import subprocess
 import argparse
 import sys
+import json
 from typing import Optional, TypeVar
 from pathlib import Path
 from shutil import (
@@ -23,7 +24,8 @@ from rich.progress import (
     TimeRemainingColumn,
     Progress,
     TextColumn,
-    MofNCompleteColumn
+    MofNCompleteColumn,
+    SpinnerColumn
 )
 from vosk import Model, KaldiRecognizer, SetLogLevel
 
@@ -174,6 +176,39 @@ def parse_config() -> dict:
         return {}
 
 
+def get_audio_duration(audiobook_path: PathLike) -> float:
+    """Get the duration of an audio file in seconds using ffprobe.
+
+    :param audiobook_path: Path to the audio file
+    :return: Duration in seconds, or 0.0 if duration cannot be determined
+    """
+    try:
+        # Try to use ffprobe (usually comes with ffmpeg)
+        ffprobe_cmd = str(ffmpeg).replace('ffmpeg', 'ffprobe') if isinstance(ffmpeg, str) else str(ffmpeg.parent / 'ffprobe')
+        if not Path(ffprobe_cmd).exists() and (ffprobe_cmd := which('ffprobe')) is None:
+            # Fallback: try ffprobe in same directory as ffmpeg
+            if isinstance(ffmpeg, Path):
+                ffprobe_cmd = str(ffmpeg.parent / 'ffprobe')
+            else:
+                ffprobe_cmd = 'ffprobe'
+        
+        result = subprocess.run(
+            [ffprobe_cmd, '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', str(audiobook_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+    except (ValueError, FileNotFoundError, subprocess.SubprocessError) as e:
+        # If ffprobe fails, return 0.0 to indicate duration is unknown
+        pass
+    
+    return 0.0
+
+
 '''
     Function Declarations
 '''
@@ -232,6 +267,8 @@ def parse_args():
                         help='Generate a cue file in the audiobook directory for editing chapter markers. Can also be set in defaults.toml. Default disabled')
     parser.add_argument('--cue_path', '-cp', nargs='?', default=None, metavar='CUE_PATH', type=path_exists,
                         help='Path to cue file in non-default location (i.e., not in the audiobook directory) containing chapter timecodes. Can also be set in defaults.toml, which has lesser precedence than this argument')
+    parser.add_argument('--verbose', '-v', action='store_true', dest='verbose',
+                        help='Enable verbose output showing detailed progress and diagnostic information')
 
     args = parser.parse_args()
     config = parse_config()
@@ -354,7 +391,7 @@ def parse_args():
         con.print("[bold red]CRITICAL:[/] ffmpeg was not found in config file or system PATH. Aborting")
         sys.exit(1)
 
-    return args.audiobook, meta_fields, language, model_name, model_type, cue_file
+    return args.audiobook, meta_fields, language, model_name, model_type, cue_file, args.verbose
 
 
 def build_progress(bar_type: str) -> Progress:
@@ -386,6 +423,16 @@ def build_progress(bar_type: str) -> Progress:
             "[progress.percentage]{task.percentage:>3.1f}%",
             "•",
             DownloadColumn()
+        )
+    elif bar_type == 'timecode':
+        progress = Progress(
+            text_column,
+            BarColumn(bar_width=None),
+            "[progress.percentage]{task.percentage:>3.1f}%",
+            "•",
+            TextColumn("[progress.description]{task.description}"),
+            "•",
+            TimeRemainingColumn()
         )
     else:
         raise ValueError("Unknown progress bar type")
@@ -617,7 +664,8 @@ def convert_time(time: str) -> str:
 def split_file(audiobook_path: PathLike,
                timecodes: list[dict],
                metadata: dict,
-               cover_art: Optional[str]) -> None:
+               cover_art: Optional[str],
+               verbose: bool = False) -> None:
 
     """Splits a single .mp3 file into chapterized segments.
 
@@ -625,6 +673,7 @@ def split_file(audiobook_path: PathLike,
     :param timecodes: List of start/end markers for each chapter
     :param metadata: File metadata passed via CLI and/or parsed from audiobook file
     :param cover_art: Optional path to cover art
+    :param verbose: Enable verbose output showing ffmpeg commands and real-time output
     :return: An integer status code
     """
 
@@ -683,10 +732,32 @@ def split_file(audiobook_path: PathLike,
             command_copy.extend([*stream, *track_num, '-metadata', f"title={times['chapter_type']}",
                                  f'{file_path}'])
 
+            if verbose:
+                con.print(f"[dim]ffmpeg command:[/] {' '.join(str(c) for c in command_copy)}")
+
             try:
-                with open(log_path, 'a+') as fp:
-                    fp.write('----------------------------------------------------\n\n')
-                    subprocess.run(command_copy, stdout=fp, stderr=fp)
+                if verbose:
+                    # In verbose mode, show output in real-time and also log to file
+                    with open(log_path, 'a+') as fp:
+                        fp.write('----------------------------------------------------\n\n')
+                        fp.write(f"Command: {' '.join(str(c) for c in command_copy)}\n\n")
+                        result = subprocess.run(
+                            command_copy,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            bufsize=1
+                        )
+                        # Write output to both log file and console
+                        output = result.stdout
+                        fp.write(output)
+                        if output.strip():
+                            con.print(f"[dim]{output.strip()}[/]")
+                else:
+                    # Normal mode: only log to file
+                    with open(log_path, 'a+') as fp:
+                        fp.write('----------------------------------------------------\n\n')
+                        subprocess.run(command_copy, stdout=fp, stderr=fp)
             except Exception as e:
                 con.print(
                     f"[bold red]ERROR:[/] An exception occurred writing logs to file: "
@@ -700,7 +771,7 @@ def split_file(audiobook_path: PathLike,
             progress.update(task, advance=1)
 
 
-def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str) -> Path:
+def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str, verbose: bool = False) -> Path:
     """Generate chapter timecodes using vosk Machine Learning API.
 
     This function searches for the specified model/language within the project's 'models' directory and
@@ -711,6 +782,7 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
     :param audiobook_path: Path to input audiobook file
     :param language: Language used by the parser
     :param model_type: The type of model (large or small)
+    :param verbose: Enable verbose output showing SRT lines as they're generated
     :return: Path to timecode file
     """
 
@@ -755,14 +827,113 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
     rec = KaldiRecognizer(model, sample_rate)
     rec.SetWords(True)
 
+    # Get audio duration for progress calculation
+    duration = get_audio_duration(audiobook_path)
+    file_size = Path(audiobook_path).stat().st_size
+    
+    # Estimate total bytes to process (16-bit samples at 16kHz = 32000 bytes/second)
+    # For s16le format: 2 bytes per sample, 16000 samples per second = 32000 bytes/second
+    bytes_per_second = sample_rate * 2
+    if duration > 0:
+        total_bytes = int(duration * bytes_per_second)
+    else:
+        # Fallback: estimate based on file size (rough approximation)
+        # MP3 is compressed, so we estimate the uncompressed size
+        # Typical compression ratio is around 10:1, but we'll be conservative
+        total_bytes = file_size * 5  # Rough estimate
+
     try:
-        # Convert the file to wav (if needed), and stream output to file
-        with subprocess.Popen([str(ffmpeg), "-loglevel", "quiet", "-i",
-                               audiobook_path,
-                               "-ar", str(sample_rate), "-ac", "1", "-f", "s16le", "-"],
-                              stdout=subprocess.PIPE).stdout as stream:
-            with open(out_file, 'w+') as fp:
-                fp.writelines(rec.SrtResult(stream))
+        # Build progress bar
+        progress = build_progress(bar_type='timecode')
+        with progress:
+            task = progress.add_task(
+                '',
+                total=total_bytes,
+                verb='Generating',
+                noun='Timecodes...'
+            )
+            
+            # Convert the file to wav (if needed), and stream output to file
+            with subprocess.Popen([str(ffmpeg), "-loglevel", "quiet", "-i",
+                                   audiobook_path,
+                                   "-ar", str(sample_rate), "-ac", "1", "-f", "s16le", "-"],
+                                  stdout=subprocess.PIPE).stdout as stream:
+                with open(out_file, 'w+') as fp:
+                    bytes_processed = 0
+                    chunk_size = 4000  # Read in ~4KB chunks (2000 samples at 16-bit)
+                    srt_counter = 1
+                    
+                    # Process audio stream in chunks to track progress
+                    last_update_bytes = 0
+                    while True:
+                        chunk = stream.read(chunk_size)
+                        if not chunk:
+                            break
+                        
+                        bytes_processed += len(chunk)
+                        
+                        # Feed chunk to recognizer
+                        if rec.AcceptWaveform(chunk):
+                            result = rec.Result()
+                            if result:
+                                result_dict = json.loads(result)
+                                if 'result' in result_dict and result_dict['result']:
+                                    # Format as SRT
+                                    words = result_dict['result']
+                                    if words:
+                                        start_time = words[0]['start']
+                                        end_time = words[-1]['end']
+                                        text = ' '.join([w['word'] for w in words])
+                                        
+                                        # Convert to SRT time format (HH:MM:SS,mmm)
+                                        start_srt = f"{int(start_time // 3600):02d}:{int((start_time % 3600) // 60):02d}:{int(start_time % 60):02d},{int((start_time % 1) * 1000):03d}"
+                                        end_srt = f"{int(end_time // 3600):02d}:{int((end_time % 3600) // 60):02d}:{int(end_time % 60):02d},{int((end_time % 1) * 1000):03d}"
+                                        srt_line = f"{srt_counter}\n{start_srt} --> {end_srt}\n{text}\n\n"
+                                        fp.write(srt_line)
+                                        if verbose:
+                                            con.print(f"[dim]SRT {srt_counter}:[/] {text}")
+                                        srt_counter += 1
+                        
+                        # Update progress bar periodically (every ~1MB to avoid too frequent updates)
+                        bytes_since_update = bytes_processed - last_update_bytes
+                        if bytes_since_update >= 1024 * 1024:  # Update every ~1MB
+                            mb_processed = bytes_processed // 1024 // 1024
+                            if duration > 0:
+                                time_processed = bytes_processed / bytes_per_second
+                                time_str = f"{int(time_processed // 60)}m {int(time_processed % 60)}s"
+                                progress.update(
+                                    task,
+                                    completed=bytes_processed,
+                                    description=f"{mb_processed} MB / {time_str}"
+                                )
+                            else:
+                                progress.update(
+                                    task,
+                                    completed=bytes_processed,
+                                    description=f"{mb_processed} MB"
+                                )
+                            last_update_bytes = bytes_processed
+                    
+                    # Get final result
+                    final_result = rec.FinalResult()
+                    if final_result:
+                        result_dict = json.loads(final_result)
+                        if 'result' in result_dict and result_dict['result']:
+                            words = result_dict['result']
+                            if words:
+                                start_time = words[0]['start']
+                                end_time = words[-1]['end']
+                                text = ' '.join([w['word'] for w in words])
+                                
+                                start_srt = f"{int(start_time // 3600):02d}:{int((start_time % 3600) // 60):02d}:{int(start_time % 60):02d},{int((start_time % 1) * 1000):03d}"
+                                end_srt = f"{int(end_time // 3600):02d}:{int((end_time % 3600) // 60):02d}:{int(end_time % 60):02d},{int((end_time % 1) * 1000):03d}"
+                                srt_line = f"{srt_counter}\n{start_srt} --> {end_srt}\n{text}\n\n"
+                                fp.write(srt_line)
+                                if verbose:
+                                    con.print(f"[dim]SRT {srt_counter}:[/] {text}")
+                    
+                    # Final progress update to 100%
+                    progress.update(task, completed=total_bytes)
 
         con.print("[bold green]SUCCESS![/] Timecode file created\n")
     except Exception as e:
@@ -967,7 +1138,7 @@ def main():
         sys.exit(20)
 
     # Destructure tuple
-    audiobook_file, in_metadata, lang, model_name, model_type, cue_file = parse_args()
+    audiobook_file, in_metadata, lang, model_name, model_type, cue_file, verbose = parse_args()
     if not str(audiobook_file).endswith('.mp3'):
         con.print("[bold red]ERROR:[/] The script only works with .mp3 files (for now)")
         sys.exit(9)
@@ -1018,12 +1189,7 @@ def main():
     # Generate timecodes from mp3 file
     con.rule("[cyan]Generating Timecodes[/cyan]")
     print("\n")
-    if model_type == 'small':
-        message = "[magenta]Sit tight, this might take a while[/magenta]..."
-    else:
-        message = "[magenta]Sit tight, this might take a [u]long[/u] while[/magenta]..."
-    with con.status(message, spinner='pong'):
-        timecodes_file = generate_timecodes(audiobook_file, lang, model_type)
+    timecodes_file = generate_timecodes(audiobook_file, lang, model_type, verbose)
 
     # If cue file exists, read timecodes from file
     if cue_file and cue_file.exists():
@@ -1068,7 +1234,7 @@ def main():
     # Split the file
     con.rule("[cyan]Chapterizing File[/cyan]")
     print("\n")
-    split_file(audiobook_file, timecodes, parsed_metadata, cover_art)
+    split_file(audiobook_file, timecodes, parsed_metadata, cover_art, verbose)
 
     # Count the generated files and compare to timecode dict to ensure they match
     verify_count(audiobook_file, timecodes)
