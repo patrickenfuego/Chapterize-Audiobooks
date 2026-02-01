@@ -102,8 +102,8 @@ _excluded_phrases_german = (
     'das schlusskapitel', 'die kapitelüberschrift', 'ein kapitel'
 )
 _excluded_phrases_spanish = (
-    'capítulos', 'y capítulo', 'el capítulo', 'capítulo final', 'aquel capítulo',
-    'siguiente capítulo', 'capítulo en particular', 'glorioso capítulo', 'maravilloso capítulo',
+    'capítulos', 'y capítulo', 'este capítulo', 'el capítulo', 'otro capítulo', 'aquel capítulo',
+    'siguiente capítulo', 'capítulo en', 'glorioso capítulo', 'maravilloso capítulo',
     'siguiente capítulo', 'capítulo especial', 'capítulo navideño', 'capítulo introductorio',
     'la introducción', 'el prólogo', 'del capítulo', 'prólogo de', 'epílogo de',
     'capítulo olvidado', 'capítulo perdido', 'capítulo anterior'
