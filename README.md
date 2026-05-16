@@ -4,6 +4,9 @@
 
 # Chapterize-Audiobooks
 
+>[!important]
+> This project is no longer maintained. I do apologize to those who have asked questions and raised issues; life happened.
+
 Split a single, monolithic mp3 audiobook file into chapters using Machine Learning and ffmpeg.
 
 ![demo](https://user-images.githubusercontent.com/47511320/196572033-80cfe70c-eb57-4789-a7be-fcb2a03f18c5.gif)
