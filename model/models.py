@@ -83,6 +83,7 @@ model_languages = {
 # Signal phrases for chapter markers
 _markers_english = ('prologue', 'chapter', 'epilogue')
 _markers_german = ('prolog', 'kapitel', 'epilog')
+_markers_french = ('prologue', 'chapitre', 'épilogue')
 
 # Some false positive phrases/words that trigger a chapter marker...will need building over time
 _excluded_phrases_english = (
@@ -99,6 +100,12 @@ _excluded_phrases_english = (
 _excluded_phrases_german = (
     'der kapitelsaal', 'das schlusskapitel', 'das hauptkapitel', 'dieses kapitel',
     'das schlusskapitel', 'die kapitelüberschrift', 'ein kapitel'
+)
+
+_excluded_phrases_french = (
+    'des chapitres', 'ce chapitre', 'un chapitre', 'le chapitre',
+    'dernier chapitre', 'cet épilogue', 'le prologue', 'un prologue',
+    'un épilogue', "l'épilogue", 'ce prologue'
 )
 
 
