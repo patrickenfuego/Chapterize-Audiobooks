@@ -83,6 +83,7 @@ model_languages = {
 # Signal phrases for chapter markers
 _markers_english = ('prologue', 'chapter', 'epilogue')
 _markers_german = ('prolog', 'kapitel', 'epilog')
+_markers_spanish = ('prólogo', 'introducción', 'capítulo', 'epílogo')
 
 # Some false positive phrases/words that trigger a chapter marker...will need building over time
 _excluded_phrases_english = (
@@ -99,6 +100,13 @@ _excluded_phrases_english = (
 _excluded_phrases_german = (
     'der kapitelsaal', 'das schlusskapitel', 'das hauptkapitel', 'dieses kapitel',
     'das schlusskapitel', 'die kapitelüberschrift', 'ein kapitel'
+)
+_excluded_phrases_spanish = (
+    'capítulos', 'y capítulo', 'este capítulo', 'el capítulo', 'otro capítulo', 'aquel capítulo',
+    'siguiente capítulo', 'capítulo en', 'glorioso capítulo', 'maravilloso capítulo',
+    'siguiente capítulo', 'capítulo especial', 'capítulo navideño', 'capítulo introductorio',
+    'la introducción', 'el prólogo', 'del capítulo', 'prólogo de', 'epílogo de',
+    'capítulo olvidado', 'capítulo perdido', 'capítulo anterior'
 )
 
 
