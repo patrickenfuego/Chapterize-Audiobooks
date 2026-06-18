@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.pretty import Pretty
 from rich.panel import Panel
 from rich.table import Table
+import rich.progress
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -47,6 +48,7 @@ vosk_url = "https://alphacephei.com/vosk/models"
 vosk_link = f"[link={vosk_url}]this link[/link]"
 # Default to ffmpeg in PATH
 ffmpeg = 'ffmpeg'
+ffprobe = 'ffprobe'
 con = Console()
 
 '''
@@ -352,6 +354,26 @@ def parse_args():
         ffmpeg = 'ffmpeg'
     else:
         con.print("[bold red]CRITICAL:[/] ffmpeg was not found in config file or system PATH. Aborting")
+        sys.exit(1)
+
+    # Set ffprobe from system PATH or config file
+    global ffprobe
+    if 'ffprobe_path' in config and config['ffprobe_path'] != 'ffprobe':
+        if Path(config['ffprobe_path']).exists():
+            ffprobe = Path(config['ffprobe_path'])
+        elif (ffprobe := which('ffprobe')) is not None:
+            con.print(
+                "[yellow]NOTE:[/] ffprobe path in [blue]defaults.toml[/] does not exist, but "
+                f"was found in system PATH: [green]{ffprobe}[/]"
+            )
+            ffprobe = 'ffprobe'
+        else:
+            con.print("[bold red]CRITICAL:[/] ffprobe path in [blue]defaults.toml[/] does not exist")
+            sys.exit(1)
+    elif (ffprobe := which('ffprobe')) is not None:
+        ffprobe = 'ffprobe'
+    else:
+        con.print("[bold red]CRITICAL:[/] ffprobe was not found in config file or system PATH. Aborting")
         sys.exit(1)
 
     return args.audiobook, meta_fields, language, model_name, model_type, cue_file
@@ -757,10 +779,20 @@ def generate_timecodes(audiobook_path: PathLike, language: str, model_type: str)
 
     try:
         # Convert the file to wav (if needed), and stream output to file
-        with subprocess.Popen([str(ffmpeg), "-loglevel", "quiet", "-i",
+        # Start by getting the length (in seconds) of the mp3 file and converting that to wav file
+        # size in bytes, for the progress bar.
+        length = subprocess.run([ffprobe, '-show_entries',
+                                 'format=duration', '-i', audiobook_path],
+                                text=True, capture_output=True).stdout
+        (_, length, _) = length.splitlines()
+        (_, length) = length.split('=')
+        # Length of .wav file is 2 bytes per sample, 16K samples per second.
+        length=int(float(length) * 16000 * 2)
+
+        with rich.progress.wrap_file(subprocess.Popen([str(ffmpeg), "-loglevel", "quiet", "-i",
                                audiobook_path,
                                "-ar", str(sample_rate), "-ac", "1", "-f", "s16le", "-"],
-                              stdout=subprocess.PIPE).stdout as stream:
+                              stdout=subprocess.PIPE).stdout, length) as stream:
             with open(out_file, 'w+') as fp:
                 fp.writelines(rec.SrtResult(stream))
 
